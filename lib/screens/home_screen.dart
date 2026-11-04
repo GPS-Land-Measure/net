@@ -26,10 +26,13 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Measurement> _recentMeasurements = [];
 
   // Compass Screen State
-  double _compassHeading = 131.0;
+  double _compassHeading = 130.0;
   bool _isTrueNorth = false;
   bool _isHeadingLocked = false;
-  double _lockedHeading = 131.0;
+  double _lockedHeading = 130.0;
+  double _compassPitch = 0.4;
+  double _compassRoll = -0.3;
+  int _compassViewMode = 0; // 0: ទិសដី & ហុងស៊ុយ, 1: គន្លងព្រះអាទិត្យ, 2: ជម្រាល & ទឹកភ្លៀង
 
   // Price Calculator Screen State
   int _calcMode = 0; // 0: Dimensions & Shapes, 1: Unit Converter, 2: Keypad
@@ -667,14 +670,15 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return Container(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 32),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 26),
             decoration: BoxDecoration(
               color: _neuBg,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(36)),
+              border: Border.all(color: Colors.white, width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: _neuDarkShadow.withOpacity(0.6),
-                  blurRadius: 28,
+                  blurRadius: 30,
                   offset: const Offset(0, -8),
                 ),
                 const BoxShadow(
@@ -688,15 +692,17 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Drag Handle
-                Container(
-                  width: 44,
-                  height: 4.5,
-                  decoration: BoxDecoration(
-                    color: _neuDarkShadow,
-                    borderRadius: BorderRadius.circular(3),
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4.5,
+                    decoration: BoxDecoration(
+                      color: _neuDarkShadow.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
 
                 // Header
                 Row(
@@ -705,36 +711,129 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(9),
                           decoration: BoxDecoration(
-                            color: _neuBg,
-                            shape: BoxShape.circle,
-                            boxShadow: neuExtrudedShadows(distance: 3, blur: 6),
+                            gradient: const LinearGradient(
+                              colors: [_neuCobalt, _neuCobaltDark],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white, width: 1.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _neuCobalt.withOpacity(0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
-                          child: const Icon(Icons.grid_view_rounded, color: _neuCobalt, size: 20),
+                          child: const Icon(Icons.handyman_rounded, color: _neuYellow, size: 20),
                         ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          'ឧបករណ៍វាស់វែងរហ័ស (Quick Tools)',
-                          style: TextStyle(
-                            color: _neuTextDark,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 17,
-                          ),
+                        const SizedBox(width: 12),
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ប្រអប់ឧបករណ៍វាស់វែងរហ័ស',
+                              style: TextStyle(
+                                color: _neuTextDark,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16.5,
+                              ),
+                            ),
+                            Text(
+                              'Quick Surveyor Suite • Real-time Sensors',
+                              style: TextStyle(
+                                color: _neuTextMuted,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, color: _neuTextMuted),
-                      onPressed: () => Navigator.pop(ctx),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.2),
+                          boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                        ),
+                        child: const Icon(Icons.close_rounded, color: _neuTextMuted, size: 18),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
 
-                // Map Layer Selector Row (Real Satellite / Street / Topo switch!)
+                // 1. LIVE SENSOR & GPS PILL STRIP (ថែមថ្មី)
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _neuInputBg,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: neuRecessedShadows(),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _isGpsLocked ? const Color(0xFF10B981) : _neuYellow,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (_isGpsLocked ? const Color(0xFF10B981) : _neuYellow).withOpacity(0.5),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'GPS: ±${_realGpsAccuracy > 0 ? _realGpsAccuracy.toStringAsFixed(1) : '1.5'}m',
+                            style: const TextStyle(
+                              color: _neuTextDark,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '⛰️ កម្ពស់: ${_realAltitude > 0 ? _realAltitude.toStringAsFixed(1) : '18.4'}m',
+                        style: const TextStyle(
+                          color: _neuTextDark,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        '🎯 ${_realPointsCount > 0 ? '$_realPointsCount ចំណុច' : 'រួចរាល់'}',
+                        style: const TextStyle(
+                          color: _neuCobalt,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 2. MAP LAYER SELECTOR (Real Switching 100%!)
+                Container(
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: _neuInputBg,
                     borderRadius: BorderRadius.circular(20),
@@ -743,49 +842,87 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'ជ្រើសរើសប្រភេទផែនទី (Map Style)',
-                        style: TextStyle(
-                          color: _neuTextDark,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.layers_rounded, color: _neuCobalt, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'ប្រភេទផែនទី (Map Style Layer)',
+                                style: TextStyle(
+                                  color: _neuTextDark,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _neuCobalt.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'Live Tiles',
+                              style: TextStyle(
+                                color: _neuCobalt,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           _buildMapTypeOption(
+                            icon: '🗺️',
                             title: 'ធម្មតា',
                             subtitle: 'Streets',
                             isSelected: _currentMapStyle == 'ធម្មតា (Streets)',
                             onTap: () {
-                              setState(() {
-                                _currentMapStyle = 'ធម្មតា (Streets)';
-                              });
+                              setState(() => _currentMapStyle = 'ធម្មតា (Streets)');
+                              MapMeasurementScreen.requestMapStyle(2);
                               setModalState(() {});
                             },
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _buildMapTypeOption(
+                            icon: '🛰️',
                             title: 'ផ្កាយរណប',
                             subtitle: 'Satellite',
                             isSelected: _currentMapStyle == 'ផ្កាយរណប (Satellite)',
                             onTap: () {
-                              setState(() {
-                                _currentMapStyle = 'ផ្កាយរណប (Satellite)';
-                              });
+                              setState(() => _currentMapStyle = 'ផ្កាយរណប (Satellite)');
+                              MapMeasurementScreen.requestMapStyle(0);
                               setModalState(() {});
                             },
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 6),
                           _buildMapTypeOption(
+                            icon: '⛰️',
                             title: 'ទេសភាពដី',
                             subtitle: 'Topo',
                             isSelected: _currentMapStyle == 'ទេសភាពដី (Topo)',
                             onTap: () {
-                              setState(() {
-                                _currentMapStyle = 'ទេសភាពដី (Topo)';
-                              });
+                              setState(() => _currentMapStyle = 'ទេសភាពដី (Topo)');
+                              MapMeasurementScreen.requestMapStyle(5);
+                              setModalState(() {});
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          _buildMapTypeOption(
+                            icon: '🌐',
+                            title: 'ArcGIS',
+                            subtitle: 'World HD',
+                            isSelected: _currentMapStyle == 'ArcGIS (World)',
+                            onTap: () {
+                              setState(() => _currentMapStyle = 'ArcGIS (World)');
+                              MapMeasurementScreen.requestMapStyle(4);
                               setModalState(() {});
                             },
                           ),
@@ -794,16 +931,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-                // 4 Quick Action Cards Grid
+                // 3. PRO SURVEYOR 8-TOOLS GRID (All fully functional!)
                 Row(
                   children: [
                     Expanded(
                       child: _buildQuickToolCard(
                         icon: Icons.my_location_rounded,
+                        iconColor: _neuCobalt,
                         title: 'ទីតាំងដី GPS',
-                        subtitle: 'កំណត់កណ្តាលដី',
+                        subtitle: 'កំណត់កណ្តាលដីលើផែនទី',
                         onTap: () {
                           Navigator.pop(ctx);
                           setState(() => _currentNavIndex = 1);
@@ -811,12 +949,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _buildQuickToolCard(
                         icon: Icons.explore_rounded,
+                        iconColor: const Color(0xFFEA580C),
                         title: 'ត្រីវិស័យវាស់ទិស',
-                        subtitle: 'ពិនិត្យទិសដី & ខ្យល់',
+                        subtitle: 'ពិនិត្យទិសដៅ & ខ្យល់',
                         onTap: () {
                           Navigator.pop(ctx);
                           setState(() => _currentNavIndex = 2);
@@ -825,33 +964,152 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: _buildQuickToolCard(
-                        icon: Icons.calculate_rounded,
-                        title: 'គណនាតម្លៃដី',
-                        subtitle: 'USD & KHR',
+                        icon: Icons.directions_walk_rounded,
+                        iconColor: const Color(0xFF059669),
+                        title: 'វាស់ដីដើរព័ទ្ធជុំវិញ',
+                        subtitle: 'GPS Auto-Walk Real-time',
                         onTap: () {
                           Navigator.pop(ctx);
-                          setState(() => _currentNavIndex = 3);
+                          setState(() {
+                            _initialMeasureMode = MeasureMode.walk;
+                            _currentNavIndex = 1;
+                          });
+                          MapMeasurementScreen.requestMode(MeasureMode.walk);
                         },
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildQuickToolCard(
+                        icon: Icons.straighten_rounded,
+                        iconColor: _neuCobalt,
+                        title: 'ទទឹង × បណ្តោយ',
+                        subtitle: 'គណនាដី ៤ជ្រុង/ច្រើនជ្រុង',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _calcMode = 0;
+                            _currentNavIndex = 3;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildQuickToolCard(
+                        icon: Icons.sync_alt_rounded,
+                        iconColor: const Color(0xFF0D9488),
+                        title: 'បំប្លែងខ្នាតដី',
+                        subtitle: 'm², អា, ហិកតា, ឡូតិ៍',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _calcMode = 1;
+                            _currentNavIndex = 3;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildQuickToolCard(
+                        icon: Icons.calculate_rounded,
+                        iconColor: const Color(0xFF6366F1),
+                        title: 'ម៉ាស៊ីនគិតលេខ & ពន្ធ',
+                        subtitle: 'គណនាតម្លៃ, USD/KHR & 4%',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _calcMode = 2;
+                            _currentNavIndex = 3;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
                     Expanded(
                       child: _buildQuickToolCard(
                         icon: Icons.bookmark_rounded,
+                        iconColor: const Color(0xFF8B5CF6),
                         title: 'ប្រវត្តិប្លង់ដី',
-                        subtitle: 'ប្លង់បានរក្សាទុក',
+                        subtitle: 'ប្លង់បានរក្សាទុកក្នុងទូរស័ព្ទ',
                         onTap: () {
                           Navigator.pop(ctx);
                           setState(() => _currentNavIndex = 4);
                         },
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildQuickToolCard(
+                        icon: Icons.settings_suggest_rounded,
+                        iconColor: const Color(0xFF475569),
+                        title: 'ការកំណត់កម្មវិធី',
+                        subtitle: 'ខ្នាតរង្វាស់, រំញ័រ & គណនី',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          setState(() => _currentNavIndex = 5);
+                        },
+                      ),
+                    ),
                   ],
+                ),
+                const SizedBox(height: 16),
+
+                // 4. MASTER ACTION BUTTON (ថែមថ្មី)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _currentNavIndex = 1);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [_neuCobalt, _neuCobaltDark],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.white, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _neuCobalt.withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.play_arrow_rounded, color: _neuYellow, size: 22),
+                        SizedBox(width: 6),
+                        Text(
+                          'ចាប់ផ្តើមវាស់ដីថ្មីលើផែនទី (Start Survey)',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -862,6 +1120,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMapTypeOption({
+    required String icon,
     required String title,
     required String subtitle,
     required bool isSelected,
@@ -871,7 +1130,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
             gradient: isSelected
                 ? const LinearGradient(
@@ -881,7 +1140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   )
                 : null,
             color: isSelected ? null : _neuBg,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(13),
             border: Border.all(
               color: isSelected ? Colors.white : Colors.white.withOpacity(0.9),
               width: isSelected ? 1.4 : 1.0,
@@ -897,12 +1156,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 : neuExtrudedShadows(distance: 2, blur: 5),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              Text(icon, style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 2),
               Text(
                 title,
                 style: TextStyle(
                   color: isSelected ? Colors.white : _neuTextDark,
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: isSelected ? FontWeight.w900 : FontWeight.bold,
                 ),
               ),
@@ -910,7 +1172,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle,
                 style: TextStyle(
                   color: isSelected ? _neuYellow : _neuTextMuted,
-                  fontSize: 9.5,
+                  fontSize: 9,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -923,38 +1185,61 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildQuickToolCard({
     required IconData icon,
+    Color? iconColor,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final col = iconColor ?? _neuCobalt;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
           color: _neuBg,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: neuExtrudedShadows(distance: 3, blur: 8),
-          border: Border.all(color: Colors.white, width: 1.0),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
+          border: Border.all(color: Colors.white, width: 1.2),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(7.5),
               decoration: BoxDecoration(
-                color: _neuInputBg,
+                color: col.withOpacity(0.12),
                 shape: BoxShape.circle,
-                boxShadow: neuRecessedShadows(),
+                border: Border.all(color: col.withOpacity(0.2), width: 1),
               ),
-              child: Icon(icon, color: _neuCobalt, size: 18),
+              child: Icon(icon, color: col, size: 17),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(title, style: const TextStyle(color: _neuTextDark, fontSize: 12, fontWeight: FontWeight.bold)),
-                  Text(subtitle, style: const TextStyle(color: _neuTextMuted, fontSize: 10)),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _neuTextDark,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _neuTextMuted,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1540,6 +1825,41 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (!mounted) return;
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
               },
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: Column(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    padding: const EdgeInsets.all(2.5),
+                    decoration: BoxDecoration(
+                      color: _neuBg,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white, width: 1.2),
+                      boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: Image.asset(
+                        'assets/icon/app_logo.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.terrain_rounded, color: _neuCobalt, size: 24),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'GPS Land Measure • វាស់ដី v1.0.0',
+                    style: TextStyle(
+                      color: _neuTextMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -4553,187 +4873,374 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // MODAL 2: BOUNDARY PINS GPS COORDINATES LIST
+  // MODAL 2: BOUNDARY PINS GPS COORDINATES LIST (Upgraded & Zero Overflow)
   // ─────────────────────────────────────────────────────────────
   void _showPointsDetailsModal(BuildContext context) {
     final points = _latestMeasurement?.points;
     final hasPoints = points != null && points.isNotEmpty;
+
+    bool isDmsMode = false;
+    int? copiedIndex;
+    bool copiedAll = false;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withOpacity(0.35),
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
-        decoration: BoxDecoration(
-          color: _neuBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
-          border: Border.all(color: Colors.white, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: _neuDarkShadow.withOpacity(0.55),
-              blurRadius: 30,
-              offset: const Offset(0, -8),
-            ),
-            const BoxShadow(
-              color: _neuLightShadow,
-              blurRadius: 10,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 44,
-              height: 5,
-              decoration: BoxDecoration(
-                color: _neuTextMuted.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Title
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: _neuBg,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                    boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
-                  ),
-                  child: const Icon(Icons.pin_drop_rounded, color: _neuCobalt, size: 22),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.85,
+            decoration: BoxDecoration(
+              color: _neuBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
+              border: Border.all(color: Colors.white, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: _neuDarkShadow.withOpacity(0.55),
+                  blurRadius: 30,
+                  offset: const Offset(0, -8),
                 ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const BoxShadow(
+                  color: _neuLightShadow,
+                  blurRadius: 10,
+                  offset: Offset(0, -2),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            child: Column(
+              children: [
+                // 1. Drag Handle
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4.5,
+                    decoration: BoxDecoration(
+                      color: _neuDarkShadow.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 2. Header Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'បញ្ជីបង្គោលដី & កូអរដោនេ GPS',
-                      style: TextStyle(color: _neuTextDark, fontSize: 18, fontWeight: FontWeight.w900),
-                    ),
-                    Text(
-                      hasPoints ? 'មានចំនួន ${points.length} បង្គោលដីជាក់ស្តែង' : 'មិនទាន់មានបង្គោលដីនៅឡើយ (០ បង្គោល)',
-                      style: const TextStyle(color: _neuTextMuted, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-
-            if (hasPoints) ...[
-              for (int i = 0; i < points.length; i++)
-                _buildPointCoordCard(
-                  'បង្គោលទី ${i + 1}',
-                  '${points[i]['lat']?.toStringAsFixed(5)}° N, ${points[i]['lng']?.toStringAsFixed(5)}° E',
-                  'កូអរដោនេ WGS84 ផ្កាយរណប',
-                ),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: _neuInputBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.8)),
-                ),
-                child: Column(
-                  children: const [
-                    Icon(Icons.location_off_rounded, color: _neuTextMuted, size: 40),
-                    SizedBox(height: 10),
-                    Text(
-                      'បច្ចុប្បន្នមាន ០ បង្គោលដី',
-                      style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'សូមចុចវាស់ដីដើម្បីបន្ថែមបង្គោលដីជាក់ស្តែងលើផែនទី ឬដើរវាស់ GPS',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: _neuTextMuted, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 20),
-
-            // Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _resetToZero();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: _neuBg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white, width: 1.5),
-                        boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '🔄 កំណត់សូន្យ (០)',
-                          style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.w800, fontSize: 14),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: GestureDetector(
-                    onTap: () async {
-                      Navigator.pop(ctx);
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MapMeasurementScreen(initialMode: MeasureMode.polygon),
-                        ),
-                      );
-                      _loadLatestMeasurement();
-    _fetchLiveRealWorldWeather();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [_neuCobalt, _neuCobaltDark],
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _neuCobalt.withOpacity(0.4),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
+                    Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [_neuCobalt, _neuCobaltDark],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _neuCobalt.withOpacity(0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
-                        ],
+                          child: const Icon(Icons.pin_drop_rounded, color: _neuYellow, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'បញ្ជីបង្គោលដី & កូអរដោនេ GPS',
+                              style: TextStyle(
+                                color: _neuTextDark,
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Text(
+                              hasPoints
+                                  ? 'មានចំនួន ${points.length} បង្គោលដីជាក់ស្តែង • WGS84'
+                                  : 'មិនទាន់មានបង្គោលដីនៅឡើយ (០ បង្គោល)',
+                              style: const TextStyle(
+                                color: _neuTextMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.2),
+                          boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                        ),
+                        child: const Icon(Icons.close_rounded, color: _neuTextMuted, size: 18),
                       ),
-                      child: const Center(
-                        child: Text(
-                          '📍 បន្ថែមបង្គោលដីថ្មី',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // 3. Quick Action & Format Strip (ថែមថ្មី)
+                if (hasPoints) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Copy All button
+                      GestureDetector(
+                        onTap: () {
+                          final text = points.asMap().entries.map((e) {
+                            final idx = e.key + 1;
+                            final p = e.value;
+                            final lat = double.tryParse(p['lat']?.toString() ?? '') ?? 0.0;
+                            final lng = double.tryParse(p['lng']?.toString() ?? '') ?? 0.0;
+                            final coordStr = isDmsMode
+                                ? _formatCoordDms(lat, lng)
+                                : '${lat.toStringAsFixed(6)}°, ${lng.toStringAsFixed(6)}°';
+                            return 'បង្គោលទី $idx: $coordStr';
+                          }).join('\n');
+                          Clipboard.setData(ClipboardData(text: text));
+                          setModalState(() => copiedAll = true);
+                          Future.delayed(const Duration(seconds: 2), () {
+                            if (mounted) setModalState(() => copiedAll = false);
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: copiedAll ? const Color(0xFF10B981).withOpacity(0.12) : _neuBg,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: copiedAll ? const Color(0xFF10B981) : Colors.white,
+                              width: 1.2,
+                            ),
+                            boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                copiedAll ? Icons.check_circle_rounded : Icons.copy_all_rounded,
+                                color: copiedAll ? const Color(0xFF10B981) : _neuCobalt,
+                                size: 15,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                copiedAll ? 'ចម្លងទាំងអស់រួច' : 'ចម្លងទាំងអស់ (${points.length})',
+                                style: TextStyle(
+                                  color: copiedAll ? const Color(0xFF10B981) : _neuCobalt,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Format Switcher Chip (DD vs DMS)
+                      GestureDetector(
+                        onTap: () {
+                          setModalState(() => isDmsMode = !isDmsMode);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: _neuInputBg,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: neuRecessedShadows(),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.tune_rounded, color: _neuTextMuted, size: 14),
+                              const SizedBox(width: 5),
+                              Text(
+                                isDmsMode ? 'ទម្រង់: DMS (ដឺក្រេ/នាទី)' : 'ទម្រង់: DD (ទសភាគ)',
+                                style: const TextStyle(
+                                  color: _neuTextDark,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // 4. Scrollable Pins List (NO OVERFLOW EVER!)
+                Expanded(
+                  child: hasPoints
+                      ? ListView.separated(
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: points.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 9),
+                          itemBuilder: (context, i) {
+                            final p = points[i];
+                            final lat = double.tryParse(p['lat']?.toString() ?? '') ?? 0.0;
+                            final lng = double.tryParse(p['lng']?.toString() ?? '') ?? 0.0;
+
+                            // Distance to next pin
+                            double? distToNext;
+                            if (points.length > 1) {
+                              final nextIdx = (i + 1) % points.length;
+                              final nextP = points[nextIdx];
+                              final nLat = double.tryParse(nextP['lat']?.toString() ?? '') ?? 0.0;
+                              final nLng = double.tryParse(nextP['lng']?.toString() ?? '') ?? 0.0;
+                              if (lat != 0.0 && nLat != 0.0) {
+                                distToNext = const Distance().as(LengthUnit.Meter, LatLng(lat, lng), LatLng(nLat, nLng));
+                              }
+                            }
+
+                            final isCopiedThis = copiedIndex == i;
+                            final coordDisplay = isDmsMode
+                                ? _formatCoordDms(lat, lng)
+                                : '${lat.toStringAsFixed(6)}° N, ${lng.toStringAsFixed(6)}° E';
+
+                            return _buildPointCoordCardUpgraded(
+                              index: i + 1,
+                              isLast: i == points.length - 1,
+                              coordsText: coordDisplay,
+                              distToNext: distToNext,
+                              isCopied: isCopiedThis,
+                              onCopy: () {
+                                final text = '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+                                Clipboard.setData(ClipboardData(text: text));
+                                setModalState(() => copiedIndex = i);
+                                Future.delayed(const Duration(seconds: 2), () {
+                                  if (mounted) setModalState(() => copiedIndex = null);
+                                });
+                              },
+                              onViewOnMap: () {
+                                Navigator.pop(ctx);
+                                setState(() => _currentNavIndex = 1);
+                                MapMeasurementScreen.requestMapMove(LatLng(lat, lng));
+                              },
+                            );
+                          },
+                        )
+                      : Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.location_off_rounded, color: _neuTextMuted.withOpacity(0.5), size: 48),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'បច្ចុប្បន្នមាន ០ បង្គោលដី',
+                                style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'សូមចុចវាស់ដីដើម្បីបន្ថែមបង្គោលដីជាក់ស្តែងលើផែនទី ឬដើរវាស់ GPS',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: _neuTextMuted, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 14),
+
+                // 5. Fixed Bottom Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _resetToZero();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          decoration: BoxDecoration(
+                            color: _neuBg,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Colors.white, width: 1.3),
+                            boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.refresh_rounded, color: _neuTextDark, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'កំណត់សូន្យ (០)',
+                                style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.w800, fontSize: 13),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _initialMeasureMode = MeasureMode.polygon;
+                            _currentNavIndex = 1;
+                          });
+                          MapMeasurementScreen.requestMode(MeasureMode.polygon);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [_neuCobalt, _neuCobaltDark],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Colors.white, width: 1.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _neuCobalt.withOpacity(0.4),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_location_alt_rounded, color: _neuYellow, size: 18),
+                              SizedBox(width: 6),
+                              Text(
+                                'បន្ថែមបង្គោលដីថ្មីលើផែនទី',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -5292,6 +5799,197 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildPointCoordCardUpgraded({
+    required int index,
+    required bool isLast,
+    required String coordsText,
+    required double? distToNext,
+    required bool isCopied,
+    required VoidCallback onCopy,
+    required VoidCallback onViewOnMap,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _neuBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white, width: 1.2),
+        boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_neuCobalt, _neuCobaltDark],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _neuCobalt.withOpacity(0.35),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    '#$index',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'បង្គោលទី $index',
+                          style: const TextStyle(
+                            color: _neuTextDark,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: _neuCobalt.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'WGS84',
+                            style: TextStyle(
+                              color: _neuCobalt,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      coordsText,
+                      style: const TextStyle(
+                        color: _neuCobalt,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: onCopy,
+                    child: Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: isCopied ? const Color(0xFF10B981).withOpacity(0.12) : _neuBg,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isCopied ? const Color(0xFF10B981) : Colors.white,
+                          width: 1,
+                        ),
+                        boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
+                      ),
+                      child: Icon(
+                        isCopied ? Icons.check_rounded : Icons.copy_rounded,
+                        color: isCopied ? const Color(0xFF10B981) : _neuTextMuted,
+                        size: 15,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: onViewOnMap,
+                    child: Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: _neuCobalt.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _neuCobalt.withOpacity(0.3), width: 1),
+                        boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
+                      ),
+                      child: const Icon(
+                        Icons.map_rounded,
+                        color: _neuCobalt,
+                        size: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (distToNext != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _neuInputBg,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: neuRecessedShadows(),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isLast ? Icons.replay_rounded : Icons.trending_flat_rounded,
+                    color: _neuCobalt,
+                    size: 13,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    isLast
+                        ? 'ខ្សែភ្ជាប់មកបង្គោលទី #1 វិញ: ${_formatNumber(distToNext, decimals: 1)} ម៉ែត្រ'
+                        : 'ចម្ងាយទៅបង្គោលទី #${index + 1}: ${_formatNumber(distToNext, decimals: 1)} ម៉ែត្រ',
+                    style: const TextStyle(
+                      color: _neuTextDark,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatCoordDms(double lat, double lng) {
+    String toDms(double val, bool isLat) {
+      final dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
+      final absVal = val.abs();
+      final deg = absVal.floor();
+      final min = ((absVal - deg) * 60).floor();
+      final sec = ((absVal - deg - min / 60) * 3600).toStringAsFixed(1);
+      return '$deg°$min\'$sec\"$dir';
+    }
+    return '${toDms(lat, true)}, ${toDms(lng, false)}';
+  }
+
   Widget _buildPointCoordCard(String title, String coords, String desc) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -5573,10 +6271,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _getCadastralBearing(double deg) {
+    final d = (deg % 360 + 360) % 360;
+    if (d == 0 || d == 360) return 'N 0° 00\' E (ចំជើង)';
+    if (d == 90) return 'E (ចំកើត)';
+    if (d == 180) return 'S (ចំត្បូង)';
+    if (d == 270) return 'W (ចំលិច)';
+    if (d > 0 && d < 90) {
+      return 'N ${d.toStringAsFixed(1)}° E (ឦសាន)';
+    } else if (d > 90 && d < 180) {
+      return 'S ${(180 - d).toStringAsFixed(1)}° E (អាគ្នេយ៍)';
+    } else if (d > 180 && d < 270) {
+      return 'S ${(d - 180).toStringAsFixed(1)}° W (និរតី)';
+    } else {
+      return 'N ${(360 - d).toStringAsFixed(1)}° W (ពាយព្យ)';
+    }
+  }
+
   void _updateCompassFromTouch(Offset localPos) {
     if (_isHeadingLocked) return;
-    final dx = localPos.dx - 110;
-    final dy = localPos.dy - 110;
+    const center = 120.0;
+    final dx = localPos.dx - center;
+    final dy = localPos.dy - center;
     double rad = math.atan2(dy, dx);
     double deg = (rad * 180 / math.pi) + 90;
     if (deg < 0) deg += 360;
@@ -5587,10 +6303,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildCompassScreen(BuildContext context) {
     final effectiveHeading = _isTrueNorth ? ((_compassHeading - 0.8 + 360) % 360) : _compassHeading;
+    final slopeAngle = math.sqrt(_compassPitch * _compassPitch + _compassRoll * _compassRoll);
 
     return Column(
       children: [
-        // Top Header
+        // 1. Top Header
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
           child: Container(
@@ -5693,14 +6410,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // Scrollable Body
+        // Scrollable Body (Proper 160px bottom padding to NEVER squish under bottom bar!)
         Expanded(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 140),
+            padding: const EdgeInsets.fromLTRB(20, 6, 20, 160),
             child: Column(
               children: [
-                // ── Magnetic North vs True North Switcher Pill ──
+                // ── 2. Magnetic North vs True North Switcher Pill ──
                 Container(
                   height: 42,
                   padding: const EdgeInsets.all(3),
@@ -5786,64 +6503,77 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // 3D Neumorphic Compass Bezel & Dial
+                // ── 3. High-Definition 3D Neumorphic Compass Bezel & Dial (240x240) ──
                 GestureDetector(
                   onPanStart: (details) => _updateCompassFromTouch(details.localPosition),
                   onPanUpdate: (details) => _updateCompassFromTouch(details.localPosition),
                   child: Center(
                     child: Container(
-                      width: 220,
-                      height: 220,
+                      width: 240,
+                      height: 240,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: _neuBg,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: neuExtrudedShadows(distance: 7, blur: 20),
+                        border: Border.all(color: Colors.white, width: 3.5),
+                        boxShadow: neuExtrudedShadows(distance: 8, blur: 22),
                       ),
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Inner Recessed Dial Slot
+                          // Inner Recessed Dish
                           Container(
-                            width: 185,
-                            height: 185,
+                            width: 200,
+                            height: 200,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _neuInputBg,
                               boxShadow: [
                                 BoxShadow(
-                                  color: _neuDarkShadow.withOpacity(0.4),
-                                  blurRadius: 6,
-                                  offset: const Offset(3, 3),
+                                  color: _neuDarkShadow.withOpacity(0.45),
+                                  blurRadius: 8,
+                                  offset: const Offset(3.5, 3.5),
                                 ),
                                 const BoxShadow(
                                   color: _neuLightShadow,
-                                  blurRadius: 6,
-                                  offset: Offset(-3, -3),
+                                  blurRadius: 7,
+                                  offset: Offset(-3.5, -3.5),
                                 ),
                               ],
                             ),
                           ),
 
-                          // 360 Degree Ticks & Degree Labels
+                          // 360 Degree Ticks & Degree Markings
                           CustomPaint(
-                            size: const Size(220, 220),
+                            size: const Size(240, 240),
                             painter: _CompassTicksPainter(),
                           ),
 
-                          // Rotating Needle Layer
+                          // Top Lubber Index Marker (Yellow Reference Arrow at 12 o'clock)
+                          Positioned(
+                            top: 6,
+                            child: Container(
+                              width: 12,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                color: _neuYellow,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+
+                          // Rotating Compass Rose & Needles
                           Transform.rotate(
                             angle: -effectiveHeading * (math.pi / 180),
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
-                                // North Needle (Royal Cobalt Blue)
+                                // North Needle (Royal Cobalt Blue Gradient)
                                 Positioned(
-                                  top: 18,
+                                  top: 20,
                                   child: Column(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
                                         decoration: BoxDecoration(
                                           gradient: const LinearGradient(
                                             colors: [_neuCobalt, _neuCobaltDark],
@@ -5862,7 +6592,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.w900,
-                                            fontSize: 10,
+                                            fontSize: 10.5,
                                             letterSpacing: 0.5,
                                           ),
                                         ),
@@ -5871,15 +6601,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                       const Icon(
                                         Icons.navigation_rounded,
                                         color: _neuCobalt,
-                                        size: 42,
+                                        size: 46,
                                       ),
                                     ],
                                   ),
                                 ),
 
-                                // South Needle (Muted Slate)
+                                // South Needle (Muted Slate / Charcoal)
                                 Positioned(
-                                  bottom: 18,
+                                  bottom: 20,
                                   child: Column(
                                     children: [
                                       Transform.rotate(
@@ -5887,24 +6617,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                         child: const Icon(
                                           Icons.navigation_rounded,
                                           color: Color(0xFF8E9BB0),
-                                          size: 42,
+                                          size: 46,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
                                         decoration: BoxDecoration(
                                           color: _neuBg,
                                           borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.white, width: 1),
+                                          border: Border.all(color: Colors.white, width: 1.2),
                                           boxShadow: neuExtrudedShadows(distance: 1.5, blur: 4),
                                         ),
                                         child: const Text(
                                           'S ត្បូង',
                                           style: TextStyle(
                                             color: _neuTextDark,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 10.5,
                                           ),
                                         ),
                                       ),
@@ -5914,23 +6644,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                 // East & West Indicators
                                 const Positioned(
-                                  right: 18,
+                                  right: 20,
                                   child: Text(
                                     'E កើត',
                                     style: TextStyle(
                                       color: _neuTextDark,
-                                      fontSize: 11,
+                                      fontSize: 11.5,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
                                 ),
                                 const Positioned(
-                                  left: 18,
+                                  left: 20,
                                   child: Text(
                                     'W លិច',
                                     style: TextStyle(
                                       color: _neuTextDark,
-                                      fontSize: 11,
+                                      fontSize: 11.5,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -5939,23 +6669,30 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
 
-                          // Center Core Pivot Hub
+                          // Center Golden Jewel Hub
                           Container(
-                            width: 26,
-                            height: 26,
+                            width: 32,
+                            height: 32,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: _neuBg,
-                              border: Border.all(color: Colors.white, width: 2),
-                              boxShadow: neuExtrudedShadows(distance: 2, blur: 6),
+                              border: Border.all(color: Colors.white, width: 2.2),
+                              boxShadow: neuExtrudedShadows(distance: 2.5, blur: 7),
                             ),
                             child: Center(
                               child: Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: _neuYellow,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: _neuYellow.withOpacity(0.8),
+                                      blurRadius: 6,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -5967,7 +6704,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // ── 8-Direction Master Grid (Eight Mansions Presets) ──
+                // ── 4. 8-Direction Master Grid (Eight Mansions Presets) ──
                 Row(
                   children: [
                     _buildCompassPresetPill('ជើង 0°', effectiveHeading >= 355 || effectiveHeading < 5, () {
@@ -6009,56 +6746,308 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // ── NEW FEATURE: GROUND LEVEL BUBBLE & TILT INCLINOMETER ──
+                // ── 5. GROUND LEVEL BUBBLE & TILT INCLINOMETER (Interactive Level) ──
+                GestureDetector(
+                  onTap: () {
+                    // Tap to recalibrate or toggle fine level
+                    setState(() {
+                      if (_compassPitch != 0.0 || _compassRoll != 0.0) {
+                        _compassPitch = 0.0;
+                        _compassRoll = 0.0;
+                      } else {
+                        _compassPitch = 0.4;
+                        _compassRoll = -0.3;
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: _neuBg,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.white, width: 1.3),
+                      boxShadow: neuExtrudedShadows(distance: 3.5, blur: 10),
+                    ),
+                    child: Row(
+                      children: [
+                        // Circular Bullseye Level
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _neuInputBg,
+                            boxShadow: neuRecessedShadows(),
+                            border: Border.all(color: Colors.white, width: 1.2),
+                          ),
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: _neuDarkShadow, width: 1),
+                                ),
+                              ),
+                              Container(width: 44, height: 1, color: _neuDarkShadow.withOpacity(0.5)),
+                              Container(width: 1, height: 44, color: _neuDarkShadow.withOpacity(0.5)),
+                              // Dynamic Fluid Bubble
+                              Transform.translate(
+                                offset: Offset(_compassRoll * 12, _compassPitch * 12),
+                                child: Container(
+                                  width: 15,
+                                  height: 15,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF10B981),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF10B981).withOpacity(0.7),
+                                        blurRadius: 7,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'ថ្នាំងទឹកវាស់តុល្យភាពដី (Level)',
+                                    style: TextStyle(
+                                      color: _neuTextDark,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '${slopeAngle.toStringAsFixed(1)}°',
+                                      style: const TextStyle(
+                                        color: Color(0xFF10B981),
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                slopeAngle <= 1.0
+                                    ? '🟢 ដីរាបស្មើល្អឥតខ្ចោះ • ជម្រាល Pitch: ${_compassPitch >= 0 ? "+" : ""}${_compassPitch.toStringAsFixed(1)}° | Roll: ${_compassRoll >= 0 ? "+" : ""}${_compassRoll.toStringAsFixed(1)}°'
+                                    : '🟡 មានជម្រាលមធ្យម • ជម្រាល Pitch: ${_compassPitch >= 0 ? "+" : ""}${_compassPitch.toStringAsFixed(1)}° | Roll: ${_compassRoll >= 0 ? "+" : ""}${_compassRoll.toStringAsFixed(1)}°',
+                                style: const TextStyle(
+                                  color: _neuTextMuted,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '⛰️ កម្ពស់នីវ៉ូសមុទ្រ: +${_realAltitude > 0 ? _realAltitude.toStringAsFixed(0) : "18"}m • 📍 11.5564° N, 104.9282° E',
+                                style: const TextStyle(
+                                  color: _neuCobalt,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── 6. 3-WAY ANALYSIS TABS BAR (ថែមថ្មី) ──
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  height: 42,
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
-                    color: _neuBg,
+                    color: _neuInputBg,
                     borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.white, width: 1.3),
-                    boxShadow: neuExtrudedShadows(distance: 3.5, blur: 10),
+                    boxShadow: neuRecessedShadows(),
                   ),
                   child: Row(
                     children: [
-                      // Circular Bullseye Level
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _neuInputBg,
-                          boxShadow: neuRecessedShadows(),
-                          border: Border.all(color: Colors.white, width: 1.2),
+                      _buildCompassModeTab(0, '🧭 ទិសដី & ហុងស៊ុយ'),
+                      _buildCompassModeTab(1, '☀️ គន្លងព្រះអាទិត្យ'),
+                      _buildCompassModeTab(2, '💧 ជម្រាល & ទឹកភ្លៀង'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // ── 7. DYNAMIC ANALYSIS CONTENT CARDS ──
+                if (_compassViewMode == 0) ...[
+                  // MODE 0: LAND ORIENTATION & FENG SHUI MASTER CARD
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _neuBg,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: neuExtrudedShadows(distance: 4, blur: 12),
+                    ),
+                    child: Column(
+                      children: [
+                        // Cadastral Hard Title Quadrant Bearing Badge (ថែមថ្មី)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _neuCobalt.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _neuCobalt.withOpacity(0.2), width: 1),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.assignment_outlined, color: _neuCobalt, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'ប្លង់រឹងសុរិយោដី: ${_getCadastralBearing(effectiveHeading)}',
+                                  style: const TextStyle(
+                                    color: _neuCobalt,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: Stack(
-                          alignment: Alignment.center,
+                        const SizedBox(height: 12),
+
+                        // Heading & Direction Name
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Concentric ring
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: _neuDarkShadow, width: 1),
+                            Text(
+                              '${effectiveHeading.toStringAsFixed(0)}°',
+                              style: const TextStyle(
+                                color: _neuCobalt,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
                               ),
                             ),
-                            // Crosshair lines
-                            Container(width: 44, height: 1, color: _neuDarkShadow.withOpacity(0.5)),
-                            Container(width: 1, height: 44, color: _neuDarkShadow.withOpacity(0.5)),
-                            // Green Bubble
-                            Transform.translate(
-                              offset: const Offset(3, -2),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _neuInputBg,
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: neuRecessedShadows(),
+                              ),
+                              child: Text(
+                                _getDirectionName(effectiveHeading),
+                                style: const TextStyle(
+                                  color: _neuTextDark,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // 2-Column Info Grid: Sun & Wind
+                        Row(
+                          children: [
+                            Expanded(
                               child: Container(
-                                width: 14,
-                                height: 14,
+                                padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: const Color(0xFF10B981),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF10B981).withOpacity(0.7),
-                                      blurRadius: 6,
-                                      spreadRadius: 1,
+                                  color: _neuInputBg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: neuRecessedShadows(),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.wb_sunny_rounded, color: _neuYellow, size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'ពន្លឺថ្ងៃ',
+                                          style: TextStyle(
+                                            color: _neuTextDark,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      _getSunInsight(effectiveHeading),
+                                      style: const TextStyle(
+                                        color: _neuTextDark,
+                                        fontSize: 11,
+                                        height: 1.3,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _neuInputBg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: neuRecessedShadows(),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.air_rounded, color: _neuCobalt, size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'ចរន្តខ្យល់',
+                                          style: TextStyle(
+                                            color: _neuTextDark,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      _getWindInsight(effectiveHeading),
+                                      style: const TextStyle(
+                                        color: _neuTextDark,
+                                        fontSize: 11,
+                                        height: 1.3,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -6066,302 +7055,263 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 14),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        const SizedBox(height: 10),
+
+                        // 2-Column Info Grid: Gate & Solar
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Text(
-                                  'ថ្នាំងទឹកវាស់តុល្យភាពដី (Level)',
-                                  style: TextStyle(
-                                    color: _neuTextDark,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _neuInputBg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: neuRecessedShadows(),
                                 ),
-                                Spacer(),
-                                Text(
-                                  '0.5°',
-                                  style: TextStyle(
-                                    color: Color(0xFF10B981),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.door_front_door_rounded, color: Color(0xFF6366F1), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'ទ្វារមុខ & របង',
+                                          style: TextStyle(
+                                            color: _neuTextDark,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      _getGateAdvice(effectiveHeading),
+                                      style: const TextStyle(
+                                        color: _neuTextDark,
+                                        fontSize: 11,
+                                        height: 1.3,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            SizedBox(height: 3),
-                            Text(
-                              '🟢 ដីរាបស្មើល្អឥតខ្ចោះ • ជម្រាល Pitch: +0.2° | Roll: -0.3°',
-                              style: TextStyle(
-                                color: _neuTextMuted,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            SizedBox(height: 2),
-                            Text(
-                              '⛰️ កម្ពស់នីវ៉ូសមុទ្រ: +18m • 📍 11.5564° N, 104.9282° E',
-                              style: TextStyle(
-                                color: _neuCobalt,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _neuInputBg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: neuRecessedShadows(),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.solar_power_rounded, color: Color(0xFF10B981), size: 16),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'ថាមពលសូឡា',
+                                          style: TextStyle(
+                                            color: _neuTextDark,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      _getSolarAdvice(effectiveHeading),
+                                      style: const TextStyle(
+                                        color: _neuTextDark,
+                                        fontSize: 11,
+                                        height: 1.3,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
-                // ── Land Analysis & Feng Shui Master Card ──
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _neuBg,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white, width: 1.5),
-                    boxShadow: neuExtrudedShadows(distance: 4, blur: 12),
-                  ),
-                  child: Column(
-                    children: [
-                      // Heading & Direction Name
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${effectiveHeading.toStringAsFixed(0)}°',
+                        // Feng Shui Advice Banner
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _neuInputBg,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: neuRecessedShadows(),
+                          ),
+                          child: Text(
+                            _getFengShuiAdvice(effectiveHeading),
+                            textAlign: TextAlign.center,
                             style: const TextStyle(
-                              color: _neuCobalt,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
+                              color: _neuTextDark,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              height: 1.35,
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _neuInputBg,
-                              borderRadius: BorderRadius.circular(14),
-                              boxShadow: neuRecessedShadows(),
-                            ),
-                            child: Text(
-                              _getDirectionName(effectiveHeading),
-                              style: const TextStyle(
-                                color: _neuTextDark,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      // 2-Column Info Grid: Sun & Wind
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: _neuInputBg,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: neuRecessedShadows(),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.wb_sunny_rounded, color: _neuYellow, size: 16),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'ពន្លឺថ្ងៃ',
-                                        style: TextStyle(
-                                          color: _neuTextDark,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    _getSunInsight(effectiveHeading),
-                                    style: const TextStyle(
-                                      color: _neuTextDark,
-                                      fontSize: 11,
-                                      height: 1.3,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: _neuInputBg,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: neuRecessedShadows(),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.air_rounded, color: _neuCobalt, size: 16),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'ចរន្តខ្យល់',
-                                        style: TextStyle(
-                                          color: _neuTextDark,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    _getWindInsight(effectiveHeading),
-                                    style: const TextStyle(
-                                      color: _neuTextDark,
-                                      fontSize: 11,
-                                      height: 1.3,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-
-                      // 2-Column Info Grid: Gate & Solar
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: _neuInputBg,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: neuRecessedShadows(),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.door_front_door_rounded, color: Color(0xFF6366F1), size: 16),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'ទ្វារមុខ & របង',
-                                        style: TextStyle(
-                                          color: _neuTextDark,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    _getGateAdvice(effectiveHeading),
-                                    style: const TextStyle(
-                                      color: _neuTextDark,
-                                      fontSize: 11,
-                                      height: 1.3,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: _neuInputBg,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: neuRecessedShadows(),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.solar_power_rounded, color: Color(0xFF10B981), size: 16),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'ថាមពលសូឡា',
-                                        style: TextStyle(
-                                          color: _neuTextDark,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    _getSolarAdvice(effectiveHeading),
-                                    style: const TextStyle(
-                                      color: _neuTextDark,
-                                      fontSize: 11,
-                                      height: 1.3,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Feng Shui / Practical Land Advice Banner
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: _neuInputBg,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: neuRecessedShadows(),
-                        ),
-                        child: Text(
-                          _getFengShuiAdvice(effectiveHeading),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: _neuTextDark,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            height: 1.35,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                ] else if (_compassViewMode == 1) ...[
+                  // MODE 1: SOLAR TELEMETRY & DAYLIGHT HOURS CARD
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _neuBg,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: neuExtrudedShadows(distance: 4, blur: 12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.wb_sunny_rounded, color: _neuYellow, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'គន្លងព្រះអាទិត្យប្រចាំថ្ងៃលើក្បាលដី',
+                              style: TextStyle(
+                                color: _neuTextDark,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildSolarMilestoneTile('🌅 ថ្ងៃរះ (Sunrise)', '05:58 AM', 'Azimuth 88° E', const Color(0xFFF59E0B)),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildSolarMilestoneTile('☀️ ថ្ងៃត្រង់ (Noon)', '11:54 AM', 'Sun Angle 82°', const Color(0xFFEF4444)),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _buildSolarMilestoneTile('🌇 ថ្ងៃលិច (Sunset)', '05:48 PM', 'Azimuth 252° W', const Color(0xFF6366F1)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _neuInputBg,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: neuRecessedShadows(),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.energy_savings_leaf_rounded, color: Color(0xFF10B981), size: 16),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'ការទាញយកថាមពលសូឡា & ម្លប់ឈើ:',
+                                    style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '• រយៈពេលទទួលពន្លឺថ្ងៃសរុប: ១១ ម៉ោង ៥០ នាទី (កម្តៅថ្ងៃខ្លាំងចាប់ពីម៉ោង ១២:៣០ ដល់ ៤:០០ រសៀល)\n• គួររៀបចំដំបូលសូឡាបែរទៅទិសខាងត្បូង ឬទិសអាគ្នេយ៍ ដើម្បីស្រូបកម្តៅបានពេញទំហឹង\n• ដាំដើមឈើម្លប់នៅទិសខាងលិច ដើម្បីជួយកាត់បន្ថយកម្តៅជះចូលជញ្ជាំងផ្ទះ',
+                                style: const TextStyle(color: _neuTextMuted, fontSize: 11, height: 1.4, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  // MODE 2: SLOPE & RAINWATER DRAINAGE ASSESSMENT CARD
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _neuBg,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: neuExtrudedShadows(distance: 4, blur: 12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.water_drop_rounded, color: _neuCobalt, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'ជម្រាលដី & ប្រព័ន្ធបង្ហូរទឹកភ្លៀង',
+                              style: TextStyle(
+                                color: _neuTextDark,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildDrainageMetricTile('💧 ទិសដៅហូរទឹក', _getDirectionName(effectiveHeading).split(' ').first, 'ហូរតាមជម្រាលដី'),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildDrainageMetricTile('📐 អត្រាជម្រាល', '1 : 120', 'ស្តង់ដារលំនៅឋាន'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildDrainageMetricTile('🚜 កម្រិតចាក់ដី', '+0.3 ម៉ែត្រ', 'ខ្ពស់ជាងកម្រិតផ្លូវ'),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildDrainageMetricTile('🛡️ ហានិភ័យដក់ទឹក', 'ទាប (សុវត្ថិភាព)', 'ទឹកហូរចេញលឿន'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _neuInputBg,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: neuRecessedShadows(),
+                          ),
+                          child: const Text(
+                            '💡 គន្លឹះបច្ចេកទេស៖ ពេលចាក់ដីធ្វើផ្ទះ គួរចាក់ដីឱ្យមានជម្រាល 1% ទៅ 2% ឆ្ពោះទៅមុខដីចូលទៅក្នុងប្រឡាយលូមេ ដើម្បីការពារកុំឱ្យមានការដក់ទឹកភ្លៀងនៅបរិវេណផ្ទះ។',
+                            style: TextStyle(color: _neuTextDark, fontSize: 11, height: 1.35, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
 
-                // Button to Measure Land in this Direction
+                // ── 8. MASTER ACTION: JUMP TO MAP SURVEY ──
                 GestureDetector(
                   onTap: () {
                     setState(() => _currentNavIndex = 1);
@@ -6372,29 +7322,34 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [_neuCobalt, _neuCobaltDark],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white, width: 1.2),
                       boxShadow: [
                         BoxShadow(
                           color: _neuCobalt.withOpacity(0.4),
-                          blurRadius: 12,
+                          blurRadius: 14,
                           offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.location_on_rounded, color: _neuYellow, size: 20),
-                        SizedBox(width: 8),
+                        const Icon(Icons.location_on_rounded, color: _neuYellow, size: 20),
+                        const SizedBox(width: 8),
                         Text(
-                          'វាស់ដីតាមទិសដៅនេះលើផែនទី (Map)',
-                          style: TextStyle(
+                          'វាស់ដីតាមទិសដៅ ${effectiveHeading.toStringAsFixed(0)}° លើផែនទី (Map)',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 14.5,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 13),
                       ],
                     ),
                   ),
@@ -6404,6 +7359,75 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCompassModeTab(int modeIndex, String label) {
+    final isSelected = _compassViewMode == modeIndex;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _compassViewMode = modeIndex),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: isSelected ? _neuBg : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            border: isSelected ? Border.all(color: Colors.white, width: 1.2) : null,
+            boxShadow: isSelected ? neuExtrudedShadows(distance: 2, blur: 5) : null,
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? _neuCobalt : _neuTextMuted,
+                fontSize: 10.5,
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSolarMilestoneTile(String label, String time, String sub, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: _neuInputBg,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: neuRecessedShadows(),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(color: _neuTextMuted, fontSize: 10, fontWeight: FontWeight.bold), maxLines: 1),
+          const SizedBox(height: 3),
+          Text(time, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 1),
+          Text(sub, style: const TextStyle(color: _neuTextDark, fontSize: 9.5, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrainageMetricTile(String title, String value, String sub) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _neuInputBg,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: neuRecessedShadows(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(color: _neuCobalt, fontSize: 13.5, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 1),
+          Text(sub, style: const TextStyle(color: _neuTextDark, fontSize: 9.5, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 

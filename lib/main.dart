@@ -1,13 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'utils/app_theme.dart';
 
-void main() {
-  runApp(const GpsMeasureApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  bool isLoggedIn = false;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final savedLogin = prefs.getBool('is_logged_in') ?? false;
+    final userEmail = prefs.getString('user_email');
+    if (savedLogin && userEmail != null && userEmail.isNotEmpty) {
+      isLoggedIn = true;
+    }
+  } catch (_) {}
+
+  runApp(GpsMeasureApp(isLoggedIn: isLoggedIn));
 }
 
 class GpsMeasureApp extends StatelessWidget {
-  const GpsMeasureApp({super.key});
+  final bool isLoggedIn;
+
+  const GpsMeasureApp({super.key, this.isLoggedIn = false});
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +46,7 @@ class GpsMeasureApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.white),
         ),
       ),
-      home: const LoginScreen(),
+      home: isLoggedIn ? const HomeScreen() : const LoginScreen(),
     );
   }
 }

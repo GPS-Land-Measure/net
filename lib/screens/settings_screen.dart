@@ -1528,10 +1528,121 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            // ── 8. Group: Logout Button ──
+            // ── 8. Group: Official App Branding & Version ──
             SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(18, 22, 18, widget.isEmbedded ? 120 : 36),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: _neuBg,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white, width: 1.6),
+                    boxShadow: neuExtrudedShadows(distance: 3.5, blur: 10),
+                  ),
+                  child: Row(
+                    children: [
+                      // 3D Neumorphic Squircle App Icon
+                      Container(
+                        width: 64,
+                        height: 64,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                          boxShadow: neuExtrudedShadows(distance: 3, blur: 8),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: Image.asset(
+                            'assets/icon/app_logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.terrain_rounded,
+                              color: _neuCobalt,
+                              size: 32,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Text(
+                                  'GPS វាស់ដី',
+                                  style: TextStyle(
+                                    color: _neuTextDark,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'PRO',
+                                  style: TextStyle(
+                                    color: _neuCobalt,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Text(
+                              'GPS Land Measure • កំណែ 1.0.0+1',
+                              style: TextStyle(
+                                color: _neuTextMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 5,
+                              runSpacing: 4,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _neuCobalt.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    '🇰🇭 កម្ពុជា',
+                                    style: TextStyle(color: _neuCobalt, fontSize: 9.5, fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    '🛰️ RTK & GNSS',
+                                    style: TextStyle(color: Color(0xFF047857), fontSize: 9.5, fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // ── 9. Group: Logout Button ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(18, 16, 18, widget.isEmbedded ? 120 : 36),
                 child: _buildLogoutButton(),
               ),
             ),

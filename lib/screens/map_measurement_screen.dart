@@ -46,9 +46,19 @@ class MapMeasurementScreen extends StatefulWidget {
   final VoidCallback? onSaved;
 
   static final ValueNotifier<LatLng?> targetLocationRequest = ValueNotifier<LatLng?>(null);
+  static final ValueNotifier<int?> targetMapStyleRequest = ValueNotifier<int?>(null);
+  static final ValueNotifier<MeasureMode?> targetModeRequest = ValueNotifier<MeasureMode?>(null);
 
   static void requestMapMove(LatLng target) {
     targetLocationRequest.value = target;
+  }
+
+  static void requestMapStyle(int styleIndex) {
+    targetMapStyleRequest.value = styleIndex;
+  }
+
+  static void requestMode(MeasureMode mode) {
+    targetModeRequest.value = mode;
   }
 
   const MapMeasurementScreen({
@@ -237,6 +247,8 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
     _mode = widget.initialMode;
     _loadPreferences();
     MapMeasurementScreen.targetLocationRequest.addListener(_handleTargetLocationRequest);
+    MapMeasurementScreen.targetMapStyleRequest.addListener(_handleTargetMapStyleRequest);
+    MapMeasurementScreen.targetModeRequest.addListener(_handleTargetModeRequest);
     _requestLocationAndCenter();
     _startLiveGpsStream();
   }
@@ -295,6 +307,22 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
     }
   }
 
+  void _handleTargetMapStyleRequest() {
+    final style = MapMeasurementScreen.targetMapStyleRequest.value;
+    if (style != null && mounted) {
+      setState(() {
+        _mapStyleIndex = style.clamp(0, _mapStyles.length - 1);
+      });
+    }
+  }
+
+  void _handleTargetModeRequest() {
+    final mode = MapMeasurementScreen.targetModeRequest.value;
+    if (mode != null && mounted) {
+      _switchMode(mode);
+    }
+  }
+
   @override
   void didUpdateWidget(covariant MapMeasurementScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -306,6 +334,8 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   @override
   void dispose() {
     MapMeasurementScreen.targetLocationRequest.removeListener(_handleTargetLocationRequest);
+    MapMeasurementScreen.targetMapStyleRequest.removeListener(_handleTargetMapStyleRequest);
+    MapMeasurementScreen.targetModeRequest.removeListener(_handleTargetModeRequest);
     _positionStream?.cancel();
     _livePositionStream?.cancel();
     _currentCenterNotifier.dispose();

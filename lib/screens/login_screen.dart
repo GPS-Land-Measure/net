@@ -221,6 +221,7 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _checkSavedGoogleAccount() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
       final savedEmail = prefs.getString('user_email');
       if (savedEmail != null && savedEmail.isNotEmpty) {
         if (!mounted) return;
@@ -228,6 +229,15 @@ class _LoginScreenState extends State<LoginScreen>
           _lastGmailAccount = savedEmail;
           _lastGmailName = prefs.getString('user_name') ?? 'Google Surveyor';
         });
+
+        // Auto-navigate to Home if already logged in and not explicitly logged out
+        if (isLoggedIn) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _navigateToHome();
+            }
+          });
+        }
       }
     } catch (_) {}
   }
@@ -862,72 +872,25 @@ class _LoginScreenState extends State<LoginScreen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Neumorphic Compass / Satellite Dial
+        // Neumorphic 3D App Icon Badge (Official Logo)
         Container(
-          width: 116,
-          height: 116,
+          width: 118,
+          height: 118,
+          padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
             color: _neuBg,
-            shape: BoxShape.circle,
-            boxShadow: neuExtrudedShadows(distance: 8, blur: 20),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: neuExtrudedShadows(distance: 8, blur: 22),
           ),
-          child: Center(
-            child: Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: Image.asset(
+              'assets/icon/app_logo.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
                 color: _neuBg,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: _neuCobalt.withOpacity(0.85),
-                  width: 2.2,
-                ),
-                boxShadow: neuRecessedShadows(),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Compass Tick Ring Indicator
-                  Container(
-                    width: 78,
-                    height: 78,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: _neuCobalt.withOpacity(0.2),
-                        width: 1.2,
-                      ),
-                    ),
-                  ),
-
-                  // Honey Yellow Satellite / Sun Orb
-                  Positioned(
-                    top: 15,
-                    right: 17,
-                    child: Container(
-                      width: 13,
-                      height: 13,
-                      decoration: BoxDecoration(
-                        color: _neuYellow,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: _neuYellow.withOpacity(0.8),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Center Cobalt Blue Terrain & GPS Satellite Icon
-                  const Icon(
-                    Icons.explore_rounded,
-                    color: _neuCobalt,
-                    size: 46,
-                  ),
-                ],
+                child: const Icon(Icons.explore_rounded, color: _neuCobalt, size: 52),
               ),
             ),
           ),

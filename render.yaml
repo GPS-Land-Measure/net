@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: gps-land-measure
+    env: static
+    rootDir: my_first_app
+    buildCommand: bash build.sh
+    staticPublishPath: build/web
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
