@@ -2558,9 +2558,9 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          const double gap = 11.0;
+          const double gap = 9.0;
           final double cardWidth = (constraints.maxWidth - 2 * gap) / 3;
-          final double cardHeight = cardWidth * 1.05;
+          final double cardHeight = cardWidth * 0.84; // Compact and sleek like Image 1 (~88-90px)
 
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -2672,26 +2672,26 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
             stops: [0.0, 0.45, 1.0],
           ),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: Colors.white.withOpacity(0.95),
-            width: 1.5,
+            width: 1.3,
           ),
           boxShadow: [
             const BoxShadow(
               color: Colors.white,
-              offset: Offset(-3.5, -3.5),
-              blurRadius: 9,
+              offset: Offset(-2.5, -2.5),
+              blurRadius: 7,
             ),
             BoxShadow(
-              color: _neuDarkShadow.withOpacity(0.72),
-              offset: const Offset(4, 5),
-              blurRadius: 11,
-            ),
-            BoxShadow(
-              color: primaryColor.withOpacity(0.08),
-              offset: const Offset(0, 3),
+              color: _neuDarkShadow.withOpacity(0.68),
+              offset: const Offset(3, 4),
               blurRadius: 8,
+            ),
+            BoxShadow(
+              color: primaryColor.withOpacity(0.06),
+              offset: const Offset(0, 2),
+              blurRadius: 5,
             ),
           ],
         ),
@@ -2699,40 +2699,40 @@ class _HomeScreenState extends State<HomeScreen> {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(18),
             splashColor: primaryColor.withOpacity(0.18),
             highlightColor: primaryColor.withOpacity(0.08),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // 1. 3D Embossed Jewel Icon Squircle (with specular reflection)
+                  // 1. Compact 3D Jewel Icon Squircle (32x32)
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: gradientColors,
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: Colors.white.withOpacity(0.88),
-                        width: 1.3,
+                        width: 1.1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: primaryColor.withOpacity(0.40),
-                          blurRadius: 7,
-                          offset: const Offset(0, 3),
+                          color: primaryColor.withOpacity(0.38),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2.5),
                         ),
                         const BoxShadow(
                           color: Colors.white,
-                          blurRadius: 3,
-                          offset: Offset(-1, -1),
+                          blurRadius: 2,
+                          offset: Offset(-0.8, -0.8),
                         ),
                       ],
                     ),
@@ -2740,13 +2740,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Icon(
                         icon,
                         color: Colors.white,
-                        size: 21,
+                        size: 17,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
 
-                  // 2. High-Precision Survey Value & Unit
+                  // 2. High-Precision Compact Survey Value & Unit
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -2761,24 +2761,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _neuTextDark,
-                            fontSize: 16.5,
+                            fontSize: 14.0,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: -0.3,
+                            letterSpacing: -0.2,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 2.5),
+                      const SizedBox(width: 2.0),
                       Text(
                         unit,
                         style: TextStyle(
                           color: primaryColor,
-                          fontSize: 10.5,
+                          fontSize: 10.0,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 2.5),
+                  const SizedBox(height: 1.5),
 
                   // 3. Khmer Precision Metric Title
                   Text(
@@ -2788,7 +2788,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: _neuTextMuted.withOpacity(0.95),
-                      fontSize: 11,
+                      fontSize: 10.0,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
