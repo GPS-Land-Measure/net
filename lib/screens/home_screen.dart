@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
@@ -39,10 +40,33 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _calcIncludeTax = false;
 
   // Plot Dimensions Estimator State
+  int _calcPlotShapeMode = 0; // 0: Rectangle, 1: Trapezoid, 2: 4-Sided Quadrilateral
   double _calcPlotLength = 20.0;
-  double _calcPlotWidth = 5.0;
-  double _calcPlotBackWidth = 6.0;
+  double _calcPlotWidth = 24.0;
+  double _calcPlotBackWidth = 24.0;
   bool _calcIsTrapezoid = false;
+
+  // Dynamic Land Plot Sides (ថែមជ្រុង & កែប្រវែងគ្រប់ជ្រុង)
+  List<double> _plotSides = [24.0, 24.0, 20.0, 20.0];
+  List<String> _plotSideLabels = ['ក្បាលដី (A)', 'ទទឹងក្រោយ (B)', 'ជម្រៅឆ្វេង (C)', 'ជម្រៅស្តាំ (D)'];
+  List<TextEditingController> _plotSideControllers = [
+    TextEditingController(text: '24.0'),
+    TextEditingController(text: '24.0'),
+    TextEditingController(text: '20.0'),
+    TextEditingController(text: '20.0'),
+  ];
+  double _calcSideA = 24.0;
+  double _calcSideB = 24.0;
+  double _calcSideC = 20.0;
+  double _calcSideD = 20.0;
+
+  // Unit Converter State (បំប្លែងខ្នាតដី)
+  final TextEditingController _convertInputController = TextEditingController(text: '802.7');
+  String _convertSourceUnit = 'ម៉ែត្រការ៉េ (m²)';
+  bool _convertShowPriceEstimator = false;
+  double _convertPricePerM2 = 80.0;
+  final TextEditingController _convertPriceController = TextEditingController(text: '80');
+  String? _copiedUnitName;
 
   // Land Loan / Mortgage State
   double _calcDownPaymentPercent = 20.0;
@@ -55,6 +79,8 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _calcFirstOperand;
   String? _calcOperator;
   bool _calcShouldResetDisplay = false;
+  List<String> _calcHistory = [];
+  bool _calcCopied = false;
 
   // Sync state for Hero Card
   bool _isCardSyncing = false;
@@ -153,6 +179,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context).clearSnackBars();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    for (final c in _plotSideControllers) {
+      c.dispose();
+    }
+    _convertInputController.dispose();
+    _convertPriceController.dispose();
+    super.dispose();
   }
 
   String _toKhmerDigits(String input) {
@@ -6420,6 +6456,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─────────────────────────────────────────────────────────────
   void _onCalcKeyPress(String key) {
     setState(() {
+      _calcCopied = false;
       if (key == 'C') {
         _calcDisplay = '0';
         _calcFormula = '';
@@ -6427,49 +6464,358 @@ class _HomeScreenState extends State<HomeScreen> {
         _calcOperator = null;
         _calcShouldResetDisplay = false;
       } else if (key == '⌫') {
-        if (_calcDisplay.length > 1) {
+        if (_calcDisplay.length > 1 && _calcDisplay != 'Error') {
           _calcDisplay = _calcDisplay.substring(0, _calcDisplay.length - 1);
         } else {
           _calcDisplay = '0';
         }
       } else if (key == '+' || key == '-' || key == '×' || key == '÷') {
-        _calcFirstOperand = double.tryParse(_calcDisplay) ?? 0.0;
-        _calcOperator = key;
-        _calcFormula = '$_calcDisplay $key';
+        if (_calcFormula.endsWith('=')) {
+          _calcFormula = '$_calcDisplay $key';
+        } else if (_calcFormula.trim().endsWith(')')) {
+          _calcFormula = '$_calcFormula $key';
+        } else if (_calcFormula.isNotEmpty && _calcShouldResetDisplay) {
+          final parts = _calcFormula.trim().split(' ');
+          if (parts.isNotEmpty) {
+            parts[parts.length - 1] = key;
+            _calcFormula = parts.join(' ');
+          }
+        } else {
+          _calcFormula = '${_calcFormula.isEmpty ? "" : "$_calcFormula "}$_calcDisplay $key';
+        }
+        _calcShouldResetDisplay = true;
+      } else if (key == '(') {
+        if (_calcFormula.endsWith('=') || _calcFormula.isEmpty) {
+          _calcFormula = '( ';
+        } else {
+          _calcFormula = '$_calcFormula ( ';
+        }
+        _calcDisplay = '0';
+        _calcShouldResetDisplay = false;
+      } else if (key == ')') {
+        if (!_calcFormula.contains('(')) {
+          return;
+        }
+        _calcFormula = '$_calcFormula $_calcDisplay )';
         _calcShouldResetDisplay = true;
       } else if (key == '=') {
-        if (_calcOperator != null && _calcFirstOperand != null) {
-          final secondOperand = double.tryParse(_calcDisplay) ?? 0.0;
-          double result = 0.0;
-          if (_calcOperator == '+') result = _calcFirstOperand! + secondOperand;
-          if (_calcOperator == '-') result = _calcFirstOperand! - secondOperand;
-          if (_calcOperator == '×') result = _calcFirstOperand! * secondOperand;
-          if (_calcOperator == '÷') {
-            result = secondOperand != 0 ? _calcFirstOperand! / secondOperand : 0.0;
+        String fullExpr = _calcFormula;
+        if (fullExpr.endsWith('=')) {
+          return;
+        }
+        if (fullExpr.isEmpty) {
+          fullExpr = _calcDisplay;
+        } else if (!fullExpr.trim().endsWith(')')) {
+          fullExpr = '$fullExpr $_calcDisplay';
+        }
+        final result = _evaluateMathExpression(fullExpr);
+        if (result != null && !result.isNaN && !result.isInfinite) {
+          String resText = result == result.roundToDouble()
+              ? result.toInt().toString()
+              : (result.abs() < 0.001 ? result.toStringAsFixed(4) : result.toStringAsFixed(2));
+          if (resText.contains('.') && !resText.endsWith('.0')) {
+            resText = resText.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
           }
-          _calcFormula = '$_calcFormula $_calcDisplay =';
-          if (result == result.roundToDouble()) {
-            _calcDisplay = result.toInt().toString();
-          } else {
-            _calcDisplay = result.toStringAsFixed(2);
-          }
-          _calcFirstOperand = null;
-          _calcOperator = null;
+          final historyEntry = '$fullExpr = $resText';
+          _calcHistory.insert(0, historyEntry);
+          if (_calcHistory.length > 30) _calcHistory.removeLast();
+
+          _calcFormula = '$fullExpr =';
+          _calcDisplay = resText;
+          _calcShouldResetDisplay = true;
+        } else {
+          _calcDisplay = 'Error';
           _calcShouldResetDisplay = true;
         }
       } else if (key == '.') {
-        if (!_calcDisplay.contains('.')) {
+        if (_calcShouldResetDisplay) {
+          _calcDisplay = '0.';
+          _calcShouldResetDisplay = false;
+        } else if (!_calcDisplay.contains('.')) {
           _calcDisplay += '.';
         }
       } else {
-        if (_calcDisplay == '0' || _calcShouldResetDisplay) {
+        if (_calcDisplay == '0' || _calcDisplay == 'Error' || _calcShouldResetDisplay) {
           _calcDisplay = key;
           _calcShouldResetDisplay = false;
         } else {
-          _calcDisplay += key;
+          if (_calcDisplay.length < 14) {
+            _calcDisplay += key;
+          }
         }
       }
     });
+  }
+
+  void _onCalcSpecialAction(String action) {
+    setState(() {
+      _calcCopied = false;
+      final val = double.tryParse(_calcDisplay.replaceAll(',', '')) ?? 0.0;
+
+      if (action == '+4% ពន្ធ') {
+        final total = val * 1.04;
+        final resText = total == total.roundToDouble() ? total.toInt().toString() : total.toStringAsFixed(2);
+        _calcFormula = '$_calcDisplay + 4% ពន្ធ =';
+        _calcHistory.insert(0, '$_calcDisplay + 4% ពន្ធប្រថាប់ត្រា = $resText');
+        _calcDisplay = resText;
+        _calcShouldResetDisplay = true;
+      } else if (action == '×៛ 4,100') {
+        final khr = val * 4100;
+        final resText = khr.round().toString();
+        _calcFormula = '\$$_calcDisplay × 4,100៛ =';
+        _calcHistory.insert(0, '\$$_calcDisplay × 4,100៛ = ៛${_formatNumber(khr, decimals: 0)}');
+        _calcDisplay = resText;
+        _calcShouldResetDisplay = true;
+      } else if (action == '÷៛ 4,100') {
+        final usd = val / 4100;
+        final resText = usd.toStringAsFixed(2);
+        _calcFormula = '$_calcDisplay៛ ÷ 4,100 =';
+        _calcHistory.insert(0, '$_calcDisplay៛ ÷ 4,100 = \$$resText');
+        _calcDisplay = resText;
+        _calcShouldResetDisplay = true;
+      } else if (action == '√') {
+        if (val >= 0) {
+          final res = math.sqrt(val);
+          final resText = res == res.roundToDouble() ? res.toInt().toString() : res.toStringAsFixed(2);
+          _calcFormula = '√($_calcDisplay) =';
+          _calcHistory.insert(0, '√($_calcDisplay) = $resText');
+          _calcDisplay = resText;
+          _calcShouldResetDisplay = true;
+        } else {
+          _calcDisplay = 'Error';
+          _calcShouldResetDisplay = true;
+        }
+      } else if (action == 'x²') {
+        final res = val * val;
+        final resText = res == res.roundToDouble() ? res.toInt().toString() : res.toStringAsFixed(2);
+        _calcFormula = '($_calcDisplay)² =';
+        _calcHistory.insert(0, '($_calcDisplay)² = $resText');
+        _calcDisplay = resText;
+        _calcShouldResetDisplay = true;
+      } else if (action == '%') {
+        final res = val / 100.0;
+        final resText = res.toStringAsFixed(4).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+        _calcFormula = '$_calcDisplay% =';
+        _calcDisplay = resText;
+        _calcShouldResetDisplay = true;
+      } else if (action == '📍 យកដីវាស់') {
+        final area = _realAreaM2 > 0 ? _realAreaM2 : 100.0;
+        final resText = area == area.roundToDouble() ? area.toInt().toString() : area.toStringAsFixed(1);
+        _calcFormula = '📍 ដីវាស់ផ្ទាល់ =';
+        _calcDisplay = resText;
+        _calcShouldResetDisplay = true;
+      }
+    });
+  }
+
+  double? _evaluateMathExpression(String expression) {
+    try {
+      final clean = expression
+          .replaceAll('×', '*')
+          .replaceAll('÷', '/')
+          .replaceAll(' ', '');
+      if (clean.isEmpty) return null;
+      return _MathExpressionEvaluator(clean).parse();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _showCalcHistoryModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.65,
+          decoration: const BoxDecoration(
+            color: _neuBg,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4.5,
+                  decoration: BoxDecoration(
+                    color: _neuTextMuted.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.history_rounded, color: _neuCobalt, size: 22),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'ប្រវត្តិគិតលេខ (History)',
+                        style: TextStyle(
+                          color: _neuTextDark,
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _neuCobalt.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${_calcHistory.length}',
+                          style: const TextStyle(
+                            color: _neuCobalt,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_calcHistory.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _calcHistory.clear());
+                        setModalState(() {});
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 15),
+                            SizedBox(width: 4),
+                            Text(
+                              'លុបប្រវត្តិ',
+                              style: TextStyle(
+                                color: Color(0xFFEF4444),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: _calcHistory.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.calculate_outlined, size: 52, color: _neuTextMuted.withOpacity(0.4)),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'មិនទាន់មានប្រវត្តិគិតលេខនៅឡើយទេ',
+                              style: TextStyle(color: _neuTextMuted, fontSize: 13.5, fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'រាល់ពេលចុចសញ្ញា (=) ឬមុខងារពន្ធ វានឹងកត់ត្រាទុកនៅទីនេះ',
+                              style: TextStyle(color: _neuTextMuted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _calcHistory.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final item = _calcHistory[index];
+                          final parts = item.split('=');
+                          final expr = parts.first.trim();
+                          final res = parts.length > 1 ? parts.sublist(1).join('=').trim() : '';
+
+                          return GestureDetector(
+                            onTap: () {
+                              final cleanRes = res.replaceAll(RegExp(r'[^\d.]'), '');
+                              if (cleanRes.isNotEmpty) {
+                                setState(() {
+                                  _calcDisplay = cleanRes;
+                                  _calcFormula = '$expr =';
+                                  _calcShouldResetDisplay = true;
+                                });
+                                Navigator.pop(context);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _neuBg,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.white, width: 1.2),
+                                boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          expr,
+                                          style: const TextStyle(
+                                            color: _neuTextMuted,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '= $res',
+                                          style: const TextStyle(
+                                            color: _neuCobalt,
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.all(7),
+                                    decoration: BoxDecoration(
+                                      color: _neuCobalt.withOpacity(0.08),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.arrow_upward_rounded, color: _neuCobalt, size: 16),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildCalculatorScreen(BuildContext context) {
@@ -7170,262 +7516,749 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // MODE 1: PLOT DIMENSIONS & SHAPE ESTIMATOR (បណ្តោយ × ទទឹង)
+  // MODE 1: PLOT DIMENSIONS & SHAPE ESTIMATOR (បណ្តោយ × ទទឹង & ថែមជ្រុងបានគ្រប់ជ្រុង)
   // ─────────────────────────────────────────────────────────────
-  Widget _buildPlotDimensionsView() {
-    final plotArea = _calcIsTrapezoid
-        ? ((_calcPlotWidth + _calcPlotBackWidth) / 2) * _calcPlotLength
-        : _calcPlotWidth * _calcPlotLength;
-    final plotPerimeter = _calcIsTrapezoid
-        ? (_calcPlotWidth + _calcPlotBackWidth + 2 * _calcPlotLength)
-        : 2 * (_calcPlotWidth + _calcPlotLength);
+  double _calculateTotalPlotArea() {
+    final n = _plotSides.length;
+    if (n < 3) return 0.0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Shape Mode Selector: Rectangle vs Trapezoid
-        Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _calcIsTrapezoid = false),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: !_calcIsTrapezoid
-                        ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
-                        : null,
-                    color: !_calcIsTrapezoid ? null : _neuBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: !_calcIsTrapezoid ? Colors.white : Colors.white.withOpacity(0.9),
-                      width: 1.2,
-                    ),
-                    boxShadow: !_calcIsTrapezoid
-                        ? [
-                            BoxShadow(
-                              color: _neuCobalt.withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : neuExtrudedShadows(distance: 2.5, blur: 5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'ចតុកោណកែង (Rectangle)',
-                      style: TextStyle(
-                        color: !_calcIsTrapezoid ? Colors.white : _neuTextDark,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _calcIsTrapezoid = true),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    gradient: _calcIsTrapezoid
-                        ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
-                        : null,
-                    color: _calcIsTrapezoid ? null : _neuBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _calcIsTrapezoid ? Colors.white : Colors.white.withOpacity(0.9),
-                      width: 1.2,
-                    ),
-                    boxShadow: _calcIsTrapezoid
-                        ? [
-                            BoxShadow(
-                              color: _neuCobalt.withOpacity(0.4),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : neuExtrudedShadows(distance: 2.5, blur: 5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'ក្បាលតូចកន្ទុយធំ (Trapezoid)',
-                      style: TextStyle(
-                        color: _calcIsTrapezoid ? Colors.white : _neuTextDark,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+    if (_calcPlotShapeMode == 0 && n == 4) {
+      // Rectangle: Width * Length
+      return _plotSides[0] * _plotSides[2];
+    } else if (_calcPlotShapeMode == 1 && n == 4) {
+      // Trapezoid: ((Front + Rear) / 2) * Length
+      return ((_plotSides[0] + _plotSides[1]) / 2) * _plotSides[2];
+    } else if (n == 3) {
+      // Triangle: Heron's formula
+      final a = _plotSides[0];
+      final b = _plotSides[1];
+      final c = _plotSides[2];
+      final s = (a + b + c) / 2;
+      final val = s * (s - a) * (s - b) * (s - c);
+      return val > 0 ? math.sqrt(val) : 0.0;
+    } else if (n == 4) {
+      // 4-Sided Quadrilateral: Cambodian Surveyor Average Method
+      final avgW = (_plotSides[0] + _plotSides[1]) / 2;
+      final avgL = (_plotSides[2] + _plotSides[3]) / 2;
+      return avgW * avgL;
+    } else {
+      // Multi-Sided Polygon (n >= 5): Surveyor polygon area approximation
+      double p = 0.0;
+      for (final s in _plotSides) {
+        p += s;
+      }
+      final avgS = p / n;
+      final area = (n * avgS * avgS) / (4 * math.tan(math.pi / n));
+      return area > 0 ? area : 0.0;
+    }
+  }
 
-        // Live Plot Diagram & Area Preview Card
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: _neuBg,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white, width: 1.5),
-            boxShadow: neuExtrudedShadows(distance: 4, blur: 12),
-          ),
-          child: Column(
-            children: [
-              // Visual Plot Representation
-              Container(
-                width: double.infinity,
-                height: 110,
-                decoration: BoxDecoration(
-                  color: _neuInputBg,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: neuRecessedShadows(),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
+  double _calculateTotalPerimeter() {
+    double p = 0.0;
+    for (final s in _plotSides) {
+      p += s;
+    }
+    return p;
+  }
+
+  void _syncAreaCalculation() {
+    final total = _calculateTotalPlotArea();
+    _calcCustomArea = total;
+  }
+
+  void _addNewSide() {
+    setState(() {
+      final nextIndex = _plotSides.length;
+      final letter = String.fromCharCode(65 + (nextIndex % 26));
+      final defaultLen = _plotSides.isNotEmpty ? _plotSides.last : 15.0;
+      _plotSides.add(defaultLen);
+      _plotSideLabels.add('ជ្រុងទី ${nextIndex + 1} ($letter)');
+      _plotSideControllers.add(TextEditingController(text: defaultLen.toStringAsFixed(1)));
+      if (_calcPlotShapeMode != 2 && _calcPlotShapeMode != 3) {
+        _calcPlotShapeMode = 2; // Switch to multi-side mode
+      }
+      _syncAreaCalculation();
+    });
+  }
+
+  void _removeLastSide() {
+    if (_plotSides.length > 3) {
+      setState(() {
+        _plotSides.removeLast();
+        _plotSideLabels.removeLast();
+        final c = _plotSideControllers.removeLast();
+        c.dispose();
+        _syncAreaCalculation();
+      });
+    }
+  }
+
+  void _removeSpecificSide(int index) {
+    if (_plotSides.length > 3 && index < _plotSides.length) {
+      setState(() {
+        _plotSides.removeAt(index);
+        _plotSideLabels.removeAt(index);
+        final c = _plotSideControllers.removeAt(index);
+        c.dispose();
+        // Re-index remaining labels
+        for (int i = 0; i < _plotSides.length; i++) {
+          final letter = String.fromCharCode(65 + (i % 26));
+          if (i == 0) {
+            _plotSideLabels[i] = 'ក្បាលដី (A)';
+          } else if (i == 1) {
+            _plotSideLabels[i] = 'ទទឹងក្រោយ (B)';
+          } else if (i == 2 && _plotSides.length == 4) {
+            _plotSideLabels[i] = 'ជម្រៅឆ្វេង (C)';
+          } else if (i == 3 && _plotSides.length == 4) {
+            _plotSideLabels[i] = 'ជម្រៅស្តាំ (D)';
+          } else {
+            _plotSideLabels[i] = 'ជ្រុងទី ${i + 1} ($letter)';
+          }
+        }
+        _syncAreaCalculation();
+      });
+    }
+  }
+
+  void _updateSideValue(int index, double newVal) {
+    setState(() {
+      if (index < _plotSides.length) {
+        _plotSides[index] = newVal;
+        if (index < _plotSideControllers.length) {
+          _plotSideControllers[index].text = newVal.toStringAsFixed(1);
+        }
+        if (index == 0) _calcPlotWidth = newVal;
+        if (index == 1) _calcPlotBackWidth = newVal;
+        if (index == 2) _calcPlotLength = newVal;
+        if (index == 3 && _calcPlotShapeMode == 0) _calcPlotLength = newVal;
+        _syncAreaCalculation();
+      }
+    });
+  }
+
+  void _showEditSideDialog(int index) {
+    if (index >= _plotSides.length) return;
+    final label = _plotSideLabels[index];
+    final currentVal = _plotSides[index];
+    final editCtrl = TextEditingController(text: currentVal.toStringAsFixed(1));
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _neuBg,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white, width: 1.5),
+              boxShadow: neuExtrudedShadows(distance: 6, blur: 18),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   children: [
-                    // Shape boundary
                     Container(
-                      width: 180,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        color: _neuCobalt.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _neuCobalt, width: 2),
+                      width: 34,
+                      height: 34,
+                      decoration: const BoxDecoration(
+                        color: _neuCobalt,
+                        shape: BoxShape.circle,
                       ),
                       child: Center(
                         child: Text(
-                          '${plotArea.toStringAsFixed(1)} m²',
+                          String.fromCharCode(65 + (index % 26)),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'កែប្រវែងរង្វាស់ជ្រុង',
+                            style: TextStyle(
+                              color: _neuTextMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              color: _neuTextDark,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: _neuInputBg,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close_rounded, color: _neuTextMuted, size: 18),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                // Direct numeric input field
+                Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: _neuInputBg,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: neuRecessedShadows(),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.straighten_rounded, color: _neuCobalt, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: editCtrl,
+                          autofocus: true,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(
                             color: _neuCobalt,
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                           ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            hintText: 'បញ្ចូលប្រវែង',
+                          ),
                         ),
                       ),
-                    ),
-                    // Front Width label (Top)
-                    Positioned(
-                      top: 4,
-                      child: Text(
-                        'ក្បាលដី: ${_calcPlotWidth.toStringAsFixed(1)}m',
-                        style: const TextStyle(color: _neuTextDark, fontSize: 10.5, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    // Length label (Left)
-                    Positioned(
-                      left: 10,
-                      child: RotatedBox(
-                        quarterTurns: 3,
-                        child: Text(
-                          'ជម្រៅ: ${_calcPlotLength.toStringAsFixed(1)}m',
-                          style: const TextStyle(color: _neuTextDark, fontSize: 10.5, fontWeight: FontWeight.bold),
+                      const Text(
+                        'ម៉ែត្រ (m)',
+                        style: TextStyle(
+                          color: _neuTextDark,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                    ),
-                    // Rear Width label (Bottom)
-                    Positioned(
-                      bottom: 4,
-                      child: Text(
-                        _calcIsTrapezoid
-                            ? 'កន្ទុយដី: ${_calcPlotBackWidth.toStringAsFixed(1)}m'
-                            : 'ទទឹងក្រោយ: ${_calcPlotWidth.toStringAsFixed(1)}m',
-                        style: const TextStyle(color: _neuTextDark, fontSize: 10.5, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Quick delta stepping chips
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildDlgStepChip('-5m', () {
+                      final v = double.tryParse(editCtrl.text) ?? currentVal;
+                      editCtrl.text = math.max(0.5, v - 5.0).toStringAsFixed(1);
+                    }),
+                    _buildDlgStepChip('-1m', () {
+                      final v = double.tryParse(editCtrl.text) ?? currentVal;
+                      editCtrl.text = math.max(0.5, v - 1.0).toStringAsFixed(1);
+                    }),
+                    _buildDlgStepChip('+1m', () {
+                      final v = double.tryParse(editCtrl.text) ?? currentVal;
+                      editCtrl.text = (v + 1.0).toStringAsFixed(1);
+                    }),
+                    _buildDlgStepChip('+5m', () {
+                      final v = double.tryParse(editCtrl.text) ?? currentVal;
+                      editCtrl.text = (v + 5.0).toStringAsFixed(1);
+                    }),
                   ],
                 ),
-              ),
-              const SizedBox(height: 14),
+                const SizedBox(height: 20),
 
-              // Metrics Row
+                // Confirm Save Button
+                GestureDetector(
+                  onTap: () {
+                    final newVal = double.tryParse(editCtrl.text);
+                    if (newVal != null && newVal > 0) {
+                      _updateSideValue(index, newVal);
+                    }
+                    Navigator.pop(ctx);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _neuCobalt.withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'យល់ព្រម (រក្សាទុក)',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDlgStepChip(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _neuBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white, width: 1.2),
+          boxShadow: neuExtrudedShadows(distance: 1.5, blur: 3),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: _neuCobalt, fontSize: 11.5, fontWeight: FontWeight.w900),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlotDimensionsView() {
+    final plotArea = _calculateTotalPlotArea();
+    final plotPerimeter = _calculateTotalPerimeter();
+    final isRect = _calcPlotShapeMode == 0 && _plotSides.length == 4;
+    final isTrap = _calcPlotShapeMode == 1 && _plotSides.length == 4;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Shape Mode Selector
+        Row(
+          children: [
+            _buildShapeTabChip('ចតុកោណកែង', 0, Icons.crop_landscape_rounded),
+            const SizedBox(width: 6),
+            _buildShapeTabChip('ក្បាលតូចកន្ទុយធំ', 1, Icons.change_history_rounded),
+            const SizedBox(width: 6),
+            _buildShapeTabChip(
+              _plotSides.length == 4 ? 'ដី ៤ ជ្រុង' : 'ដី ${_plotSides.length} ជ្រុង',
+              2,
+              Icons.polyline_rounded,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // 2. HERO CADASTRAL DIAGRAM CARD WITH DIRECT EDITABLE PILLS & ADD SIDE CONTROLS
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _neuBg,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white, width: 1.5),
+            boxShadow: neuExtrudedShadows(distance: 4, blur: 14),
+          ),
+          child: Column(
+            children: [
+              // Header Controls Bar on the Card: Side Count & Add/Remove Side Buttons
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    children: [
-                      const Text('ផ្ទៃក្រឡាសរុប', style: TextStyle(color: _neuTextMuted, fontSize: 11, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
-                      Text('${plotArea.toStringAsFixed(1)} m²', style: const TextStyle(color: _neuCobalt, fontSize: 16, fontWeight: FontWeight.w900)),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _neuInputBg,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: neuRecessedShadows(),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.architecture_rounded, color: _neuCobalt, size: 14),
+                        const SizedBox(width: 5),
+                        Text(
+                          'ប្លង់ដី ${_plotSides.length} ជ្រុង (ចុចលើស្លាកដើម្បីកែ)',
+                          style: const TextStyle(
+                            color: _neuTextDark,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  Container(width: 1, height: 28, color: Colors.white),
-                  Column(
+
+                  // Add / Remove Side Action Buttons
+                  Row(
                     children: [
-                      const Text('គិតជា អា (Are)', style: TextStyle(color: _neuTextMuted, fontSize: 11, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
-                      Text('${(plotArea / 100).toStringAsFixed(2)} អា', style: const TextStyle(color: _neuCobalt, fontSize: 16, fontWeight: FontWeight.w900)),
-                    ],
-                  ),
-                  Container(width: 1, height: 28, color: Colors.white),
-                  Column(
-                    children: [
-                      const Text('បរិមាត្រជុំវិញ', style: TextStyle(color: _neuTextMuted, fontSize: 11, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 2),
-                      Text('${plotPerimeter.toStringAsFixed(1)} m', style: const TextStyle(color: _neuCobalt, fontSize: 16, fontWeight: FontWeight.w900)),
+                      if (_plotSides.length > 3) ...[
+                        GestureDetector(
+                          onTap: _removeLastSide,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _neuBg,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white, width: 1),
+                              boxShadow: neuExtrudedShadows(distance: 1.5, blur: 3),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.remove, color: Color(0xFFEF4444), size: 13),
+                                SizedBox(width: 2),
+                                Text(
+                                  'ដកជ្រុង',
+                                  style: TextStyle(
+                                    color: Color(0xFFEF4444),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      GestureDetector(
+                        onTap: _addNewSide,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _neuCobalt.withOpacity(0.35),
+                                blurRadius: 5,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add, color: _neuYellow, size: 14),
+                              SizedBox(width: 3),
+                              Text(
+                                '+ ថែមជ្រុង',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
 
-              if (_calcIsTrapezoid && _calcPlotBackWidth > _calcPlotWidth) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: _neuYellow.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _neuYellow.withOpacity(0.6), width: 1),
-                  ),
-                  child: const Row(
+              // Cadastral Blueprint Canvas Box
+              Container(
+                width: double.infinity,
+                height: 200,
+                decoration: BoxDecoration(
+                  color: _neuInputBg,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: neuRecessedShadows(),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Text('🐉', style: TextStyle(fontSize: 16)),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'ដីរាងកន្ទុយនាគ: ក្បាលតូចកន្ទុយធំ ជាទម្រង់ដីហុងស៊ុយរក្សាទ្រព្យ និងលាភសំណាង!',
-                          style: TextStyle(color: _neuTextDark, fontSize: 11, fontWeight: FontWeight.bold),
+                      // Architectural grid and boundary painter
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _PlotCadastralPainter(
+                            shapeMode: _calcPlotShapeMode,
+                            sides: _plotSides,
+                            cobalt: _neuCobalt,
+                            yellow: _neuYellow,
+                            textDark: _neuTextDark,
+                          ),
+                        ),
+                      ),
+
+                      // If 4 Sides: Placed neatly at 4 cardinal boundaries
+                      if (_plotSides.length == 4) ...[
+                        // Top Pill (Front Side A) - Tappable to edit!
+                        Positioned(
+                          top: 8,
+                          child: _buildDiagramDimensionPill(
+                            isRect
+                                ? 'ក្បាលដី: ${_formatNumber(_plotSides[0])}m'
+                                : 'ក្បាលដី (A): ${_formatNumber(_plotSides[0])}m',
+                            icon: Icons.north_rounded,
+                            onTap: () => _showEditSideDialog(0),
+                          ),
+                        ),
+
+                        // Bottom Pill (Rear Side B) - Tappable to edit!
+                        Positioned(
+                          bottom: 8,
+                          child: _buildDiagramDimensionPill(
+                            isRect
+                                ? 'ទទឹងក្រោយ: ${_formatNumber(_plotSides[1])}m'
+                                : 'កន្ទុយដី (B): ${_formatNumber(_plotSides[1])}m',
+                            icon: Icons.south_rounded,
+                            onTap: () => _showEditSideDialog(1),
+                          ),
+                        ),
+
+                        // Left Pill (Left Side C) - Tappable to edit!
+                        Positioned(
+                          left: 8,
+                          child: _buildDiagramDimensionPill(
+                            isRect || isTrap
+                                ? 'ជម្រៅ: ${_formatNumber(_plotSides[2])}m'
+                                : 'ឆ្វេង (C): ${_formatNumber(_plotSides[2])}m',
+                            icon: Icons.west_rounded,
+                            vertical: true,
+                            onTap: () => _showEditSideDialog(2),
+                          ),
+                        ),
+
+                        // Right Pill (Right Side D) - Tappable to edit!
+                        Positioned(
+                          right: 8,
+                          child: _buildDiagramDimensionPill(
+                            isRect || isTrap
+                                ? 'ជម្រៅ: ${_formatNumber(_plotSides[3])}m'
+                                : 'ស្តាំ (D): ${_formatNumber(_plotSides[3])}m',
+                            icon: Icons.east_rounded,
+                            vertical: true,
+                            onTap: () => _showEditSideDialog(3),
+                          ),
+                        ),
+                      ],
+
+                      // Center Floating Area Capsule Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _neuCobalt.withOpacity(0.4), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _neuCobalt.withOpacity(0.18),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.square_foot_rounded, color: _neuCobalt, size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${_formatNumber(plotArea, decimals: 1)} m²',
+                                  style: const TextStyle(
+                                    color: _neuCobalt,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '≈ ${_formatNumber(plotArea / 100, decimals: 2)} អា',
+                              style: const TextStyle(
+                                color: _neuTextMuted,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
+              ),
+
+              // If > 4 sides or 3 sides, display scrollable quick-edit pill chips right below the canvas
+              if (_plotSides.length != 4) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 32,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: _plotSides.length,
+                    itemBuilder: (ctx, i) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: _buildDiagramDimensionPill(
+                          '${_plotSideLabels[i]}: ${_formatNumber(_plotSides[i])}m',
+                          icon: Icons.straighten_rounded,
+                          onTap: () => _showEditSideDialog(i),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ],
+              const SizedBox(height: 14),
+
+              // Metrics Row (4 Metrics)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildMetricItem('ផ្ទៃក្រឡាសរុប', '${_formatNumber(plotArea, decimals: 1)} m²'),
+                  Container(width: 1, height: 26, color: Colors.white),
+                  _buildMetricItem('គិតជា អា (Are)', '${_formatNumber(plotArea / 100, decimals: 2)} អា'),
+                  Container(width: 1, height: 26, color: Colors.white),
+                  _buildMetricItem('គិតជា ហិកតា', '${_formatNumber(plotArea / 10000, decimals: 3)} ហ.ត'),
+                  Container(width: 1, height: 26, color: Colors.white),
+                  _buildMetricItem('បរិមាត្រជុំវិញ', '${_formatNumber(plotPerimeter, decimals: 1)} m'),
+                ],
+              ),
             ],
           ),
         ),
         const SizedBox(height: 16),
 
-        // Steppers for Width and Length
-        _buildDimensionStepper('ទទឹងក្បាលដី (Front Width)', _calcPlotWidth, (v) {
-          setState(() => _calcPlotWidth = math.max(1.0, v));
-        }),
+        // 3. EDIT & WRITE ALL SIDES SECTION (កន្លែងសរសេរថែមបានគ្រប់ជ្រុង)
+        Row(
+          children: [
+            const Icon(Icons.edit_note_rounded, color: _neuCobalt, size: 21),
+            const SizedBox(width: 6),
+            Text(
+              'សរសេរ & កែប្រវែងជ្រុងទាំង ${_plotSides.length} នៃដី:',
+              style: const TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.w900),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: _addNewSide,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _neuCobalt.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_circle_outline_rounded, color: _neuCobalt, size: 14),
+                    SizedBox(width: 3),
+                    Text(
+                      'ថែមជ្រុង',
+                      style: TextStyle(color: _neuCobalt, fontSize: 11, fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
 
-        if (_calcIsTrapezoid) ...[
-          _buildDimensionStepper('ទទឹងកន្ទុយដី (Rear Width)', _calcPlotBackWidth, (v) {
-            setState(() => _calcPlotBackWidth = math.max(1.0, v));
-          }),
-          const SizedBox(height: 10),
-        ],
+        // Dynamic Grid of ALL SIDES with TextFields & Steppers
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _plotSides.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (ctx, i) {
+            final letter = String.fromCharCode(65 + (i % 26));
+            return _buildDynamicSideRow(
+              index: i,
+              label: _plotSideLabels[i],
+              letter: letter,
+              controller: _plotSideControllers[i],
+              value: _plotSides[i],
+              canDelete: _plotSides.length > 3,
+            );
+          },
+        ),
+        const SizedBox(height: 14),
 
-        _buildDimensionStepper('បណ្តោយ / ជម្រៅ (Length)', _calcPlotLength, (v) {
-          setState(() => _calcPlotLength = math.max(1.0, v));
-        }),
-        const SizedBox(height: 16),
+        // Big Primary Button: គណនា & សរុបទំហំដី
+        GestureDetector(
+          onTap: () {
+            // Read all controller text fields
+            setState(() {
+              for (int i = 0; i < _plotSides.length; i++) {
+                final v = double.tryParse(_plotSideControllers[i].text);
+                if (v != null && v > 0) {
+                  _plotSides[i] = v;
+                }
+              }
+              _syncAreaCalculation();
+            });
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: _neuCobalt.withOpacity(0.4),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.calculate_rounded, color: _neuYellow, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'គណនា & បូកសរុបទំហំដី (${_formatNumber(plotArea, decimals: 1)} m²)',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
 
-        // Quick Presets in Cambodia
+        // 4. PRESETS IN CAMBODIA
         const Text(
-          'ទំហំដីឡូត៍ស្តង់ដារនៅកម្ពុជា:',
+          'ទំហំដីគំរូទូទៅ:',
           style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
@@ -7438,11 +8271,14 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildPresetPlotChip2('វីឡាភ្លោះ 8m × 20m', 8.0, 20.0),
             _buildPresetPlotChip2('វីឡាទោល 10m × 25m', 10.0, 25.0),
             _buildPresetPlotChip2('ដីឡូតិ៍ធំ 20m × 30m', 20.0, 30.0),
+            _buildPreset4SideChip('ដី ៤ ជ្រុង 10×12×25×26m', 10, 12, 25, 26),
+            _buildPreset4SideChip('ដីលំនៅឋាន 15×18×30×32m', 15, 18, 30, 32),
+            _buildPreset4SideChip('ដីចម្ការ 40×48×80×90m', 40, 48, 80, 90),
           ],
         ),
         const SizedBox(height: 20),
 
-        // Apply to Calculator Button
+        // 5. Apply to Converter Button
         GestureDetector(
           onTap: () {
             setState(() {
@@ -7470,7 +8306,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Icon(Icons.sync_alt_rounded, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Text(
-                  'យកទំហំដីនេះ (${plotArea.toStringAsFixed(1)} m²) ទៅបំប្លែងខ្នាត',
+                  'យកទំហំដីនេះ (${_formatNumber(plotArea, decimals: 1)} m²) ទៅបំប្លែងខ្នាត',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
@@ -7485,65 +8321,355 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDimensionStepper(String label, double value, Function(double) onChanged) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: _neuBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white, width: 1.2),
-        boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: _neuTextDark, fontSize: 12.5, fontWeight: FontWeight.bold)),
-          Row(
+  Widget _buildShapeTabChip(String label, int mode, IconData icon) {
+    final isSelected = _calcPlotShapeMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _calcPlotShapeMode = mode;
+            _calcIsTrapezoid = (mode == 1);
+            if (mode == 0) {
+              // Reset to 4 rectangle sides
+              while (_plotSides.length > 4) {
+                _plotSides.removeLast();
+                _plotSideLabels.removeLast();
+                _plotSideControllers.removeLast().dispose();
+              }
+              while (_plotSides.length < 4) {
+                _plotSides.add(20.0);
+                _plotSideLabels.add('ជ្រុង');
+                _plotSideControllers.add(TextEditingController(text: '20.0'));
+              }
+              _plotSideLabels[0] = 'ក្បាលដី (A)';
+              _plotSideLabels[1] = 'ទទឹងក្រោយ (B)';
+              _plotSideLabels[2] = 'ជម្រៅឆ្វេង (C)';
+              _plotSideLabels[3] = 'ជម្រៅស្តាំ (D)';
+              _plotSides[0] = _calcPlotWidth;
+              _plotSides[1] = _calcPlotWidth;
+              _plotSides[2] = _calcPlotLength;
+              _plotSides[3] = _calcPlotLength;
+              _plotSideControllers[0].text = _calcPlotWidth.toStringAsFixed(1);
+              _plotSideControllers[1].text = _calcPlotWidth.toStringAsFixed(1);
+              _plotSideControllers[2].text = _calcPlotLength.toStringAsFixed(1);
+              _plotSideControllers[3].text = _calcPlotLength.toStringAsFixed(1);
+            }
+            _syncAreaCalculation();
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            gradient: isSelected
+                ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
+                : null,
+            color: isSelected ? null : _neuBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? Colors.white : Colors.white.withOpacity(0.9),
+              width: 1.2,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: _neuCobalt.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : neuExtrudedShadows(distance: 2.5, blur: 5),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              GestureDetector(
-                onTap: () => onChanged(value - 1.0),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: _neuBg,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.2),
-                    boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
-                  ),
-                  child: const Icon(Icons.remove, color: _neuCobalt, size: 16),
-                ),
+              Icon(
+                icon,
+                color: isSelected ? _neuYellow : _neuCobalt,
+                size: 15,
               ),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _neuInputBg,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: neuRecessedShadows(),
-                ),
-                child: Text(
-                  '${value.toStringAsFixed(1)} m',
-                  style: const TextStyle(color: _neuCobalt, fontSize: 14, fontWeight: FontWeight.w900),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => onChanged(value + 1.0),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: _neuBg,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.2),
-                    boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
-                  ),
-                  child: const Icon(Icons.add, color: _neuCobalt, size: 16),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : _neuTextDark,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiagramDimensionPill(
+    String text, {
+    required IconData icon,
+    required VoidCallback onTap,
+    bool vertical = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
+        decoration: BoxDecoration(
+          color: _neuBg.withOpacity(0.97),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: _neuCobalt.withOpacity(0.18),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: _neuCobalt, size: 11),
+            const SizedBox(width: 4),
+            Text(
+              text,
+              style: const TextStyle(
+                color: _neuTextDark,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.edit_rounded, color: _neuCobalt, size: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: _neuTextMuted, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(color: _neuCobalt, fontSize: 13, fontWeight: FontWeight.w900),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDynamicSideRow({
+    required int index,
+    required String label,
+    required String letter,
+    required TextEditingController controller,
+    required double value,
+    required bool canDelete,
+  }) {
+    final color = index % 2 == 0 ? _neuCobalt : _neuYellow;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: _neuBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white, width: 1.2),
+        boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+      ),
+      child: Row(
+        children: [
+          // Letter badge
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.18),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                letter,
+                style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Label (Tap to edit popup)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showEditSideDialog(index),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: _neuTextDark,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Text(
+                    'ចុចកែប្រវែង',
+                    style: TextStyle(
+                      color: _neuTextMuted,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Minus Button
+          GestureDetector(
+            onTap: () {
+              final v = math.max(0.5, ((value - 1.0) * 10).round() / 10);
+              _updateSideValue(index, v);
+            },
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: _neuBg,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1),
+                boxShadow: neuExtrudedShadows(distance: 1.5, blur: 3),
+              ),
+              child: const Icon(Icons.remove, color: _neuCobalt, size: 14),
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // Direct Editable TextField
+          Container(
+            width: 76,
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: _neuInputBg,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: neuRecessedShadows(),
+            ),
+            child: Center(
+              child: TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _neuCobalt,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w900,
+                ),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                  suffixText: 'm',
+                  suffixStyle: TextStyle(
+                    color: _neuTextMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onChanged: (val) {
+                  final n = double.tryParse(val);
+                  if (n != null && n > 0) {
+                    _updateSideValue(index, n);
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // Plus Button
+          GestureDetector(
+            onTap: () {
+              final v = ((value + 1.0) * 10).round() / 10;
+              _updateSideValue(index, v);
+            },
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: _neuBg,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1),
+                boxShadow: neuExtrudedShadows(distance: 1.5, blur: 3),
+              ),
+              child: const Icon(Icons.add, color: _neuCobalt, size: 14),
+            ),
+          ),
+
+          // Delete Side Button (if more than 3 sides)
+          if (canDelete) ...[
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () => _removeSpecificSide(index),
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 15),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildPreset4SideChip(String label, double a, double b, double c, double d) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          while (_plotSides.length > 4) {
+            _plotSides.removeLast();
+            _plotSideLabels.removeLast();
+            _plotSideControllers.removeLast().dispose();
+          }
+          while (_plotSides.length < 4) {
+            _plotSides.add(20.0);
+            _plotSideLabels.add('ជ្រុង');
+            _plotSideControllers.add(TextEditingController(text: '20.0'));
+          }
+          _plotSides[0] = a;
+          _plotSides[1] = b;
+          _plotSides[2] = c;
+          _plotSides[3] = d;
+          _plotSideControllers[0].text = a.toStringAsFixed(1);
+          _plotSideControllers[1].text = b.toStringAsFixed(1);
+          _plotSideControllers[2].text = c.toStringAsFixed(1);
+          _plotSideControllers[3].text = d.toStringAsFixed(1);
+          _calcPlotShapeMode = 2;
+          _syncAreaCalculation();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _neuBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white, width: 1.2),
+          boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: _neuCobalt, fontSize: 11, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
@@ -7552,10 +8678,30 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: () {
         setState(() {
+          while (_plotSides.length > 4) {
+            _plotSides.removeLast();
+            _plotSideLabels.removeLast();
+            _plotSideControllers.removeLast().dispose();
+          }
+          while (_plotSides.length < 4) {
+            _plotSides.add(20.0);
+            _plotSideLabels.add('ជ្រុង');
+            _plotSideControllers.add(TextEditingController(text: '20.0'));
+          }
+          _plotSides[0] = w;
+          _plotSides[1] = w;
+          _plotSides[2] = l;
+          _plotSides[3] = l;
+          _plotSideControllers[0].text = w.toStringAsFixed(1);
+          _plotSideControllers[1].text = w.toStringAsFixed(1);
+          _plotSideControllers[2].text = l.toStringAsFixed(1);
+          _plotSideControllers[3].text = l.toStringAsFixed(1);
           _calcPlotWidth = w;
           _calcPlotLength = l;
           _calcPlotBackWidth = w;
           _calcIsTrapezoid = false;
+          _calcPlotShapeMode = 0;
+          _syncAreaCalculation();
         });
       },
       child: Container(
@@ -7803,113 +8949,888 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // MODE 3: MULTI-UNIT LAND CONVERTER
+  // MODE 3: MULTI-UNIT LAND CONVERTER (បំប្លែងខ្នាតដីទំនើប & ដំណើរការបានពិត)
   // ─────────────────────────────────────────────────────────────
+  void _copyToClipboard(String text, String unitName) {
+    Clipboard.setData(ClipboardData(text: text));
+    setState(() {
+      _copiedUnitName = unitName;
+    });
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          if (_copiedUnitName == unitName) _copiedUnitName = null;
+        });
+      }
+    });
+  }
+
+  void _showUnitPickerModal() {
+    final units = [
+      'ម៉ែត្រការ៉េ (m²)',
+      'អា (Are)',
+      'ហិកតា (Ha)',
+      'ឡូត៍ (5m×20m)',
+      'ម៉ែត្របួនជ្រុង (ម.៤)',
+      'ហ្វីតការ៉េ (ft²)',
+      'អាអ័រ (Acre)',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
+          decoration: BoxDecoration(
+            color: _neuBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: Colors.white, width: 1.5),
+            boxShadow: neuExtrudedShadows(distance: 8, blur: 20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4.5,
+                decoration: BoxDecoration(
+                  color: _neuDarkShadow,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'ជ្រើសរើសខ្នាតដីដើម (Input Unit)',
+                style: TextStyle(
+                  color: _neuTextDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ...units.map((u) {
+                final isSelected = _convertSourceUnit == u;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _convertSourceUnit = u);
+                    Navigator.pop(ctx);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: isSelected
+                          ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
+                          : null,
+                      color: isSelected ? null : _neuBg,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? Colors.white : Colors.white.withOpacity(0.9),
+                        width: 1.2,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: _neuCobalt.withOpacity(0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : neuExtrudedShadows(distance: 2, blur: 4),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          u,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : _neuTextDark,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(Icons.check_circle_rounded, color: _neuYellow, size: 18),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildUnitConverterView(double currentArea) {
-    final m2 = currentArea;
-    final are = m2 / 100;
-    final ha = m2 / 10000;
+    // Read input number directly from controller
+    final inputNum = double.tryParse(_convertInputController.text) ??
+        (currentArea > 0 ? currentArea : 802.7);
+
+    // Convert selected source unit to base square meters (m²)
+    double baseM2 = inputNum;
+    if (_convertSourceUnit == 'ម៉ែត្រការ៉េ (m²)') {
+      baseM2 = inputNum;
+    } else if (_convertSourceUnit == 'អា (Are)') {
+      baseM2 = inputNum * 100.0;
+    } else if (_convertSourceUnit == 'ហិកតា (Ha)') {
+      baseM2 = inputNum * 10000.0;
+    } else if (_convertSourceUnit == 'ឡូត៍ (5m×20m)') {
+      baseM2 = inputNum * 100.0;
+    } else if (_convertSourceUnit == 'ម៉ែត្របួនជ្រុង (ម.៤)') {
+      baseM2 = inputNum * 16.0;
+    } else if (_convertSourceUnit == 'ហ្វីតការ៉េ (ft²)') {
+      baseM2 = inputNum / 10.7639;
+    } else if (_convertSourceUnit == 'អាអ័រ (Acre)') {
+      baseM2 = inputNum * 4046.86;
+    }
+
+    baseM2 = math.max(0.0, baseM2);
+
+    // Calculated target units
+    final m2 = baseM2;
+    final are = m2 / 100.0;
+    final ha = m2 / 10000.0;
+    final plots5x20 = m2 / 100.0;
+    final plots4x16 = m2 / 64.0;
+    final khmerSqMeter = m2 / 16.0;
     final sqft = m2 * 10.7639;
     final acre = m2 / 4046.86;
-    final plots = m2 / 100;
+    final km2 = m2 / 1000000.0;
+
+    // Price calculation
+    final totalPriceUsd = baseM2 * _convertPricePerM2;
+    final totalPriceKhr = totalPriceUsd * 4100.0;
+    final tax4PctUsd = totalPriceUsd * 0.04;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title banner
+        // 1. HERO INTERACTIVE CONVERSION INPUT CARD
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: _neuInputBg,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: neuRecessedShadows(),
+            color: _neuBg,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white, width: 1.5),
+            boxShadow: neuExtrudedShadows(distance: 4, blur: 14),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('ទំហំដីដែលកំពុងបំប្លែង:', style: TextStyle(color: _neuTextMuted, fontWeight: FontWeight.bold, fontSize: 13)),
-              Text('${m2.toStringAsFixed(1)} m²', style: const TextStyle(color: _neuCobalt, fontWeight: FontWeight.w900, fontSize: 16)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.swap_horiz_rounded, color: _neuCobalt, size: 20),
+                      SizedBox(width: 6),
+                      Text(
+                        'បញ្ចូលទំហំដីដែលចង់បំប្លែង:',
+                        style: TextStyle(
+                          color: _neuTextDark,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_realAreaM2 > 0)
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _convertInputController.text = _realAreaM2.toStringAsFixed(1);
+                          _convertSourceUnit = 'ម៉ែត្រការ៉េ (m²)';
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _neuCobalt.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.my_location_rounded, color: _neuCobalt, size: 12),
+                            const SizedBox(width: 3),
+                            Text(
+                              'យកដីវាស់បាន (${_formatNumber(_realAreaM2, decimals: 0)}m²)',
+                              style: const TextStyle(
+                                color: _neuCobalt,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Live input row with editable field + Source unit selector
+              Row(
+                children: [
+                  // Numeric TextField
+                  Expanded(
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: _neuInputBg,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: neuRecessedShadows(),
+                      ),
+                      child: Center(
+                        child: TextField(
+                          controller: _convertInputController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: const TextStyle(
+                            color: _neuCobalt,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            hintText: '0.0',
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Source Unit Dropdown Button
+                  GestureDetector(
+                    onTap: _showUnitPickerModal,
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _neuCobalt.withOpacity(0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _convertSourceUnit,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_drop_down_rounded, color: _neuYellow, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Quick Step Chips
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildConverterStepChip('-100', () {
+                    final v = math.max(0.0, inputNum - 100.0);
+                    _convertInputController.text = v.toStringAsFixed(1);
+                    setState(() {});
+                  }),
+                  _buildConverterStepChip('-10', () {
+                    final v = math.max(0.0, inputNum - 10.0);
+                    _convertInputController.text = v.toStringAsFixed(1);
+                    setState(() {});
+                  }),
+                  _buildConverterStepChip('+10', () {
+                    final v = inputNum + 10.0;
+                    _convertInputController.text = v.toStringAsFixed(1);
+                    setState(() {});
+                  }),
+                  _buildConverterStepChip('+100', () {
+                    final v = inputNum + 100.0;
+                    _convertInputController.text = v.toStringAsFixed(1);
+                    setState(() {});
+                  }),
+                  _buildConverterStepChip('C សម្អាត', () {
+                    _convertInputController.text = '0';
+                    setState(() {});
+                  }, isClear: true),
+                ],
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
-        _buildConverterCard('ម៉ែត្រការ៉េ (Square Meters)', '${m2.toStringAsFixed(1)} m²', 'ខ្នាតស្តង់ដារអន្តរជាតិ'),
-        _buildConverterCard('អា (Are)', '${are.toStringAsFixed(2)} អា', '១ អា = ១០០ ម៉ែត្រការ៉េ'),
-        _buildConverterCard('ហិកតា (Hectare)', '${ha.toStringAsFixed(4)} Ha', '១ ហិកតា = ១០,០០០ ម៉ែត្រការ៉េ'),
-        _buildConverterCard('ឡូត៍ស្តង់ដារ (5m × 20m)', '${plots.toStringAsFixed(1)} ឡូត៍', '១ ឡូត៍ = ១០០ ម៉ែត្រការ៉េ'),
-        _buildConverterCard('ហ្វីតការ៉េ (Square Feet)', '${sqft.toStringAsFixed(1)} ft²', '១ m² = ១០.៧៦ ft²'),
-        _buildConverterCard('អាអ័រ (Acre)', '${acre.toStringAsFixed(4)} ac', '១ Acre = ៤,០៤៦.៨៦ m²'),
+        // 2. REAL-WORLD COMPARISON CARD (ថែមថ្មី: ប្រៀបធៀបទំហំដីជាមួយរបស់ជាក់ស្តែង)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _neuBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white, width: 1.2),
+            boxShadow: neuExtrudedShadows(distance: 3, blur: 8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.lightbulb_outline_rounded, color: _neuYellow, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    'ទំហំដី ${_formatNumber(m2, decimals: 1)} m² នេះ ជាក់ស្តែងស្មើនឹង:',
+                    style: const TextStyle(
+                      color: _neuTextDark,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _buildComparisonTile('🏟️ តារាងបាល់ទាត់', '${_formatNumber(m2 / 7140, decimals: 2)} តារាង'),
+                  const SizedBox(width: 8),
+                  _buildComparisonTile('🏘️ ឡូត៍ផ្ទះល្វែង', '${_formatNumber(plots4x16, decimals: 1)} ផ្ទះ'),
+                  const SizedBox(width: 8),
+                  _buildComparisonTile('🛏️ បន្ទប់ 4×4m', '${_formatNumber(m2 / 16, decimals: 0)} បន្ទប់'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
 
-        const SizedBox(height: 16),
-        // Typical plot presets in Cambodia
-        const Text('ជ្រើសរើសទំហំដីគំរូទូទៅនៅកម្ពុជា:', style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.w900, fontSize: 13.5)),
-        const SizedBox(height: 10),
+        // 3. INSTANT LAND PRICE ESTIMATOR TOGGLE (ថែមថ្មី: ប៉ាន់ស្មានតម្លៃដីសរុប)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _neuBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white, width: 1.2),
+            boxShadow: neuExtrudedShadows(distance: 3, blur: 8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.monetization_on_rounded, color: Color(0xFF10B981), size: 20),
+                      SizedBox(width: 6),
+                      Text(
+                        'គណនាតម្លៃដីសរុបតាមខ្នាតនេះ (Price Estimator)',
+                        style: TextStyle(
+                          color: _neuTextDark,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Switch(
+                    value: _convertShowPriceEstimator,
+                    activeColor: _neuCobalt,
+                    onChanged: (v) => setState(() => _convertShowPriceEstimator = v),
+                  ),
+                ],
+              ),
+              if (_convertShowPriceEstimator) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Text('តម្លៃក្នុង ១ m²:', style: TextStyle(color: _neuTextMuted, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 90,
+                      height: 32,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: _neuInputBg,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: neuRecessedShadows(),
+                      ),
+                      child: Center(
+                        child: TextField(
+                          controller: _convertPriceController,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: _neuCobalt, fontSize: 13, fontWeight: FontWeight.w900),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            prefixText: '\$',
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          onChanged: (val) {
+                            final p = double.tryParse(val);
+                            if (p != null) setState(() => _convertPricePerM2 = p);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 4,
+                        children: [30, 50, 80, 120, 200].map((pr) {
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _convertPricePerM2 = pr.toDouble();
+                                _convertPriceController.text = pr.toString();
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _convertPricePerM2 == pr ? _neuCobalt : _neuBg,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white, width: 1),
+                              ),
+                              child: Text(
+                                '\$$pr',
+                                style: TextStyle(
+                                  color: _convertPricePerM2 == pr ? Colors.white : _neuCobalt,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Grand price result
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _neuInputBg,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: neuRecessedShadows(),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('តម្លៃដីសរុបប៉ាន់ស្មាន:', style: TextStyle(color: _neuTextMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text(
+                            '\$${_formatNumber(totalPriceUsd, decimals: 0)} USD',
+                            style: const TextStyle(color: _neuCobalt, fontSize: 17, fontWeight: FontWeight.w900),
+                          ),
+                          Text(
+                            '≈ ៛${_formatNumber(totalPriceKhr, decimals: 0)} រៀល',
+                            style: const TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('ពន្ធប្រថាប់ត្រា ៤%:', style: TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          Text(
+                            '+\$${_formatNumber(tax4PctUsd, decimals: 0)} USD',
+                            style: const TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.w900),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // 4. NEUMORPHIC UNIT CONVERSION TILES (លេងស្ទាយស្អាតបែប Soft UI)
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildPresetPlotChip('4m × 16m', 64),
-            const SizedBox(width: 8),
-            _buildPresetPlotChip('5m × 20m', 100),
-            const SizedBox(width: 8),
-            _buildPresetPlotChip('10m × 20m', 200),
-            const SizedBox(width: 8),
-            _buildPresetPlotChip('20m × 30m', 600),
+            const Text(
+              'តារាងបំប្លែងគ្រប់ខ្នាត (ចុចដើម្បីចម្លង):',
+              style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.w900),
+            ),
+            if (_copiedUnitName != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      'បានចម្លង $_copiedUnitName!',
+                      style: const TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+              ),
           ],
+        ),
+        const SizedBox(height: 10),
+
+        // 1. Square Meters (ម៉ែត្រការ៉េ)
+        _buildRichConverterCard(
+          icon: Icons.square_foot_rounded,
+          iconColor: _neuCobalt,
+          title: 'ម៉ែត្រការ៉េ (Square Meters)',
+          valueText: '${_formatNumber(m2, decimals: 1)} m²',
+          copyText: '${m2.toStringAsFixed(1)} m²',
+          desc: 'ខ្នាតស្តង់ដារអន្តរជាតិ (SI Standard)',
+          unitKey: 'ម៉ែត្រការ៉េ',
+        ),
+
+        // 2. Are (អា)
+        _buildRichConverterCard(
+          icon: Icons.landscape_rounded,
+          iconColor: _neuYellow,
+          title: 'អា (Are)',
+          valueText: '${_formatNumber(are, decimals: 2)} អា',
+          copyText: '${are.toStringAsFixed(2)} អា',
+          desc: '១ អា = ១០០ ម៉ែត្រការ៉េ',
+          unitKey: 'អា',
+        ),
+
+        // 3. Hectare (ហិកតា)
+        _buildRichConverterCard(
+          icon: Icons.forest_rounded,
+          iconColor: const Color(0xFF10B981),
+          title: 'ហិកតា (Hectare)',
+          valueText: '${_formatNumber(ha, decimals: 4)} Ha',
+          copyText: '${ha.toStringAsFixed(4)} Ha',
+          desc: '១ ហិកតា = ១០,០០០ ម៉ែត្រការ៉េ',
+          unitKey: 'ហិកតា',
+        ),
+
+        // 4. Standard Plots 5m x 20m (ឡូត៍ស្តង់ដារ)
+        _buildRichConverterCard(
+          icon: Icons.view_quilt_rounded,
+          iconColor: const Color(0xFF8B5CF6),
+          title: 'ឡូត៍ស្តង់ដារ (5m × 20m)',
+          valueText: '${_formatNumber(plots5x20, decimals: 1)} ឡូត៍',
+          copyText: '${plots5x20.toStringAsFixed(1)} ឡូត៍',
+          desc: '១ ឡូត៍ស្តង់ដារ = ១០០ ម៉ែត្រការ៉េ',
+          unitKey: 'ឡូត៍ 5x20',
+        ),
+
+        // 5. Shop-house Plots 4m x 16m (ឡូត៍ផ្ទះល្វែង) - NEW!
+        _buildRichConverterCard(
+          icon: Icons.home_work_rounded,
+          iconColor: const Color(0xFF06B6D4),
+          title: 'ឡូត៍ផ្ទះល្វែង (4m × 16m)',
+          valueText: '${_formatNumber(plots4x16, decimals: 1)} ឡូត៍',
+          copyText: '${plots4x16.toStringAsFixed(1)} ឡូត៍',
+          desc: '១ ឡូត៍ផ្ទះល្វែង = ៦៤ ម៉ែត្រការ៉េ',
+          unitKey: 'ឡូត៍ 4x16',
+        ),
+
+        // 6. Khmer Traditional 4-Sided Meter (ម៉ែត្របួនជ្រុង) - NEW!
+        _buildRichConverterCard(
+          icon: Icons.grid_view_rounded,
+          iconColor: const Color(0xFFD97706),
+          title: 'ម៉ែត្របួនជ្រុង (Khmer Traditional)',
+          valueText: '${_formatNumber(khmerSqMeter, decimals: 1)} ម៉ែត្របួនជ្រុង',
+          copyText: '${khmerSqMeter.toStringAsFixed(1)} ម៉ែត្របួនជ្រុង',
+          desc: 'ខ្នាតដីខ្មែរបុរាណ (១ ម៉ែត្របួនជ្រុង = ១៦ m²)',
+          unitKey: 'ម៉ែត្របួនជ្រុង',
+        ),
+
+        // 7. Square Feet (ហ្វីតការ៉េ)
+        _buildRichConverterCard(
+          icon: Icons.straighten_rounded,
+          iconColor: const Color(0xFF6366F1),
+          title: 'ហ្វីតការ៉េ (Square Feet)',
+          valueText: '${_formatNumber(sqft, decimals: 1)} ft²',
+          copyText: '${sqft.toStringAsFixed(1)} ft²',
+          desc: '១ m² = ១០.៧៦៣៩ ft²',
+          unitKey: 'ហ្វីតការ៉េ',
+        ),
+
+        // 8. Acre (អាអ័រ)
+        _buildRichConverterCard(
+          icon: Icons.terrain_rounded,
+          iconColor: const Color(0xFFEC4899),
+          title: 'អាអ័រ (Acre)',
+          valueText: '${_formatNumber(acre, decimals: 4)} ac',
+          copyText: '${acre.toStringAsFixed(4)} ac',
+          desc: '១ Acre = ៤,០៤៦.៨៦ ម៉ែត្រការ៉េ',
+          unitKey: 'អាអ័រ',
+        ),
+
+        // 9. Square Kilometers (គីឡូម៉ែត្រការ៉េ) - NEW!
+        _buildRichConverterCard(
+          icon: Icons.map_rounded,
+          iconColor: const Color(0xFF475569),
+          title: 'គីឡូម៉ែត្រការ៉េ (Square Kilometers)',
+          valueText: '${_formatNumber(km2, decimals: 6)} km²',
+          copyText: '${km2.toStringAsFixed(6)} km²',
+          desc: '១ km² = ១,០០០,០០០ ម៉ែត្រការ៉េ',
+          unitKey: 'km²',
+        ),
+        const SizedBox(height: 16),
+
+        // 5. CAMBODIAN LAND PRESETS
+        const Text(
+          'ជ្រើសរើសទំហំដីគំរូទូទៅនៅកម្ពុជា:',
+          style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.w900, fontSize: 13.5),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildPresetPlotChip('ផ្ទះល្វែង 4×16m', 64),
+            _buildPresetPlotChip('វីឡាកូនកាត់ 5×20m', 100),
+            _buildPresetPlotChip('វីឡាទោល 10×25m', 250),
+            _buildPresetPlotChip('ដីឡូតិ៍ធំ 20×30m', 600),
+            _buildPresetPlotChip('ដីចម្ការ ១ ហិកតា', 10000),
+            _buildPresetPlotChip('ដីកសិកម្ម ៥ ហិកតា', 50000),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // 6. COPY ALL RESULTS ACTION BUTTON
+        GestureDetector(
+          onTap: () {
+            final summary = '''
+📋 តារាងបំប្លែងទំហំដី:
+• ម៉ែត្រការ៉េ: ${m2.toStringAsFixed(1)} m²
+• អា (Are): ${are.toStringAsFixed(2)} អា
+• ហិកតា (Ha): ${ha.toStringAsFixed(4)} Ha
+• ឡូត៍ស្តង់ដារ (5×20m): ${plots5x20.toStringAsFixed(1)} ឡូត៍
+• ឡូត៍ផ្ទះល្វែង (4×16m): ${plots4x16.toStringAsFixed(1)} ឡូត៍
+• ម៉ែត្របួនជ្រុង: ${khmerSqMeter.toStringAsFixed(1)} ម៉ែត្របួនជ្រុង
+• ហ្វីតការ៉េ: ${sqft.toStringAsFixed(1)} ft²
+• អាអ័រ (Acre): ${acre.toStringAsFixed(4)} ac
+គណនាដោយកម្មវិធី GPS Land Measure''';
+            _copyToClipboard(summary, 'លទ្ធផលទាំងអស់');
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: _neuCobalt.withOpacity(0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.copy_all_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'ចម្លងលទ្ធផលបំប្លែងខ្នាតទាំងអស់ (Copy All)',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildPresetPlotChip(String label, double area) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _calcCustomArea = area),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: _neuBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white, width: 1.2),
-            boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
-          ),
-          child: Column(
-            children: [
-              Text(label, style: const TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 11)),
-              Text('${area.toInt()}m²', style: const TextStyle(color: _neuCobalt, fontWeight: FontWeight.w900, fontSize: 11)),
-            ],
+  Widget _buildConverterStepChip(String label, VoidCallback onTap, {bool isClear = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _neuBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white, width: 1.2),
+          boxShadow: neuExtrudedShadows(distance: 1.5, blur: 3),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isClear ? const Color(0xFFEF4444) : _neuCobalt,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildConverterCard(String title, String value, String desc) {
+  Widget _buildComparisonTile(String label, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: _neuInputBg,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: neuRecessedShadows(),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(color: _neuTextMuted, fontSize: 9.5, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(color: _neuCobalt, fontSize: 12, fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRichConverterCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String valueText,
+    required String copyText,
+    required String desc,
+    required String unitKey,
+  }) {
+    final isCopied = _copiedUnitName == unitKey;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: _neuBg,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white, width: 1.2),
-        boxShadow: neuExtrudedShadows(distance: 3, blur: 8),
+        boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 2),
-              Text(desc, style: const TextStyle(color: _neuTextMuted, fontSize: 10.5)),
-            ],
+          // Icon Capsule
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 19),
           ),
-          Text(
-            value,
-            style: const TextStyle(color: _neuCobalt, fontWeight: FontWeight.w900, fontSize: 15),
+          const SizedBox(width: 10),
+
+          // Title & Description
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 12.5),
+                ),
+                const SizedBox(height: 1.5),
+                Text(desc, style: const TextStyle(color: _neuTextMuted, fontSize: 10)),
+              ],
+            ),
+          ),
+
+          // Value and Quick Copy
+          GestureDetector(
+            onTap: () => _copyToClipboard(copyText, unitKey),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  valueText,
+                  style: const TextStyle(color: _neuCobalt, fontWeight: FontWeight.w900, fontSize: 14),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: isCopied ? const Color(0xFF10B981) : _neuBg,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1),
+                    boxShadow: neuExtrudedShadows(distance: 1, blur: 2),
+                  ),
+                  child: Icon(
+                    isCopied ? Icons.check : Icons.copy_rounded,
+                    color: isCopied ? Colors.white : _neuTextMuted,
+                    size: 11,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPresetPlotChip(String label, double area) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _convertInputController.text = area.toString();
+          _convertSourceUnit = 'ម៉ែត្រការ៉េ (m²)';
+          _calcCustomArea = area;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: _neuBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white, width: 1.2),
+          boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
+        ),
+        child: Column(
+          children: [
+            Text(label, style: const TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 10.5)),
+            Text('${_formatNumber(area, decimals: 0)}m²', style: const TextStyle(color: _neuCobalt, fontWeight: FontWeight.w900, fontSize: 10.5)),
+          ],
+        ),
       ),
     );
   }
@@ -7917,77 +9838,355 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─────────────────────────────────────────────────────────────
   // MODE 4: STANDARD INTERACTIVE KEYPAD CALCULATOR
   // ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // MODE 4: STANDARD INTERACTIVE KEYPAD CALCULATOR
+  // ─────────────────────────────────────────────────────────────
   Widget _buildStandardKeypadView() {
+    final displayNum = double.tryParse(_calcDisplay.replaceAll(',', ''));
+    final hasValidNumber = displayNum != null && displayNum > 0;
+
     return Column(
       children: [
-        // LCD Display
+        // 1. TOP QUICK ACTION PILLS
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // History button
+            GestureDetector(
+              onTap: _showCalcHistoryModal,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _neuBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white, width: 1.2),
+                  boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.history_rounded, color: _neuCobalt, size: 16),
+                    const SizedBox(width: 5),
+                    Text(
+                      'ប្រវត្តិ (${_calcHistory.length})',
+                      style: const TextStyle(
+                        color: _neuCobalt,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Pull GPS Measured Area
+            GestureDetector(
+              onTap: () => _onCalcSpecialAction('📍 យកដីវាស់'),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _neuBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white, width: 1.2),
+                  boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.my_location_rounded, color: _neuYellow, size: 15),
+                    const SizedBox(width: 5),
+                    Text(
+                      'យកដីវាស់ (${_realAreaM2 > 0 ? _realAreaM2.toStringAsFixed(0) : '100'}m²)',
+                      style: const TextStyle(
+                        color: _neuTextDark,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Copy to Clipboard
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: _calcDisplay));
+                setState(() => _calcCopied = true);
+                Future.delayed(const Duration(seconds: 2), () {
+                  if (mounted) setState(() => _calcCopied = false);
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _calcCopied ? const Color(0xFF10B981).withOpacity(0.12) : _neuBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: _calcCopied ? const Color(0xFF10B981) : Colors.white,
+                    width: 1.2,
+                  ),
+                  boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _calcCopied ? Icons.check_rounded : Icons.copy_rounded,
+                      color: _calcCopied ? const Color(0xFF10B981) : _neuTextMuted,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _calcCopied ? 'ចម្លងរួច' : 'ចម្លង',
+                      style: TextStyle(
+                        color: _calcCopied ? const Color(0xFF10B981) : _neuTextMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 2. ILLUMINATED SURVEYOR LCD DISPLAY
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
           decoration: BoxDecoration(
             color: _neuInputBg,
             borderRadius: BorderRadius.circular(22),
             boxShadow: neuRecessedShadows(),
-            border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.2),
+            border: Border.all(color: Colors.white.withOpacity(0.85), width: 1.4),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                _calcFormula.isEmpty ? ' ' : _calcFormula,
-                style: const TextStyle(color: _neuTextMuted, fontSize: 14, fontWeight: FontWeight.w600),
+              // Expression Formula Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _neuCobalt.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'CALC • DEG',
+                      style: TextStyle(color: _neuCobalt, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      _calcFormula.isEmpty ? '0' : _calcFormula,
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _neuTextMuted.withOpacity(0.8),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
-              Text(
-                _calcDisplay,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _neuCobalt, fontSize: 36, fontWeight: FontWeight.w900),
+
+              // Main Bold Numerical Display
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  _calcDisplay,
+                  style: const TextStyle(
+                    color: _neuCobalt,
+                    fontSize: 38,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
+                ),
               ),
+
+              // Quick cadastral unit equivalence preview
+              if (hasValidNumber) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      '≈ ${_formatNumber(displayNum / 100, decimals: 2)} អា  •  ${_formatNumber(displayNum / 10000, decimals: 4)} ហិកតា',
+                      style: const TextStyle(
+                        color: _neuTextMuted,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
 
-        // Keypad Grid (4 columns x 5 rows)
-        _buildKeypadRow(['C', '(', ')', '÷'], isTopRow: true),
-        const SizedBox(height: 10),
+        // 3. LAND & REAL ESTATE SPECIAL STRIP (ថែមថ្មី)
+        SizedBox(
+          height: 38,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            children: [
+              _buildCalcSpecialChip('+4% ពន្ធ', () => _onCalcSpecialAction('+4% ពន្ធ'), isHighlight: true),
+              _buildCalcSpecialChip('×៛ 4,100', () => _onCalcSpecialAction('×៛ 4,100')),
+              _buildCalcSpecialChip('÷៛ 4,100', () => _onCalcSpecialAction('÷៛ 4,100')),
+              _buildCalcSpecialChip('√', () => _onCalcSpecialAction('√')),
+              _buildCalcSpecialChip('x²', () => _onCalcSpecialAction('x²')),
+              _buildCalcSpecialChip('%', () => _onCalcSpecialAction('%')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 4. MAIN KEYPAD GRID (4 columns x 5 rows)
+        _buildKeypadRow(['C', '(', ')', '÷']),
+        const SizedBox(height: 9),
         _buildKeypadRow(['7', '8', '9', '×']),
-        const SizedBox(height: 10),
+        const SizedBox(height: 9),
         _buildKeypadRow(['4', '5', '6', '-']),
-        const SizedBox(height: 10),
+        const SizedBox(height: 9),
         _buildKeypadRow(['1', '2', '3', '+']),
-        const SizedBox(height: 10),
+        const SizedBox(height: 9),
         _buildKeypadRow(['0', '.', '⌫', '=']),
+        const SizedBox(height: 14),
+
+        // 5. BOTTOM ACTION: SEND TO UNIT CONVERTER
+        GestureDetector(
+          onTap: () {
+            final v = double.tryParse(_calcDisplay.replaceAll(',', '')) ?? 0.0;
+            if (v > 0) {
+              _convertInputController.text = v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
+            }
+            setState(() => _calcMode = 1);
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [_neuCobalt, _neuCobaltDark],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white, width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: _neuCobalt.withOpacity(0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.sync_alt_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'យកទំហំនេះ ($_calcDisplay m²) ទៅបំប្លែងខ្នាតដី',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 12),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildKeypadRow(List<String> keys, {bool isTopRow = false}) {
+  Widget _buildCalcSpecialChip(String label, VoidCallback onTap, {bool isHighlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: isHighlight ? _neuCobalt.withOpacity(0.08) : _neuBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isHighlight ? _neuCobalt.withOpacity(0.4) : Colors.white,
+              width: 1.2,
+            ),
+            boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isHighlight ? _neuCobalt : _neuTextDark,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKeypadRow(List<String> keys) {
     return Row(
       children: keys.map((key) {
         final isOperator = key == '+' || key == '-' || key == '×' || key == '÷';
         final isEqual = key == '=';
         final isClear = key == 'C';
+        final isBackspace = key == '⌫';
 
         return Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 4.5),
             child: GestureDetector(
               onTap: () => _onCalcKeyPress(key),
               child: Container(
                 height: 52,
                 decoration: BoxDecoration(
                   gradient: isEqual
-                      ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
-                      : (isOperator ? LinearGradient(colors: [_neuBg, _neuInputBg]) : null),
-                  color: isEqual ? null : _neuBg,
+                      ? const LinearGradient(
+                          colors: [_neuCobalt, _neuCobaltDark],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : (isClear
+                          ? LinearGradient(
+                              colors: [const Color(0xFFFEE2E2), _neuBg],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null),
+                  color: isEqual || isClear ? null : _neuBg,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white, width: 1.2),
+                  border: Border.all(
+                    color: isEqual ? _neuCobalt : Colors.white,
+                    width: 1.2,
+                  ),
                   boxShadow: isEqual
                       ? [
                           BoxShadow(
-                            color: _neuCobalt.withOpacity(0.4),
+                            color: _neuCobalt.withOpacity(0.45),
                             blurRadius: 10,
                             offset: const Offset(0, 3),
                           ),
@@ -7995,18 +10194,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       : neuExtrudedShadows(distance: 2.5, blur: 6),
                 ),
                 child: Center(
-                  child: Text(
-                    key,
-                    style: TextStyle(
-                      color: isEqual
-                          ? Colors.white
-                          : (isClear
-                              ? const Color(0xFFEF4444)
-                              : (isOperator ? _neuCobalt : _neuTextDark)),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
+                  child: isBackspace
+                      ? const Icon(Icons.backspace_outlined, color: _neuTextMuted, size: 19)
+                      : Text(
+                          key,
+                          style: TextStyle(
+                            color: isEqual
+                                ? Colors.white
+                                : (isClear
+                                    ? const Color(0xFFEF4444)
+                                    : (isOperator ? _neuCobalt : _neuTextDark)),
+                            fontSize: isOperator || isEqual ? 20 : 18.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -8103,4 +10304,269 @@ class _CompassTicksPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ─────────────────────────────────────────────────────────────
+// CADASTRAL PLOT CANVAS PAINTER (រូបទីពីរ: គំនូសព្រំដីស្ថាបត្យកម្ម & ពហុកោណច្រើនជ្រុង)
+// ─────────────────────────────────────────────────────────────
+class _PlotCadastralPainter extends CustomPainter {
+  final int shapeMode; // 0: rectangle, 1: trapezoid, 2: 4-sided irregular, 3: multi-side
+  final List<double> sides;
+  final Color cobalt;
+  final Color yellow;
+  final Color textDark;
+
+  _PlotCadastralPainter({
+    required this.shapeMode,
+    required this.sides,
+    required this.cobalt,
+    required this.yellow,
+    required this.textDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Subtle architectural cadastral grid
+    final gridPaint = Paint()
+      ..color = textDark.withOpacity(0.06)
+      ..strokeWidth = 0.8;
+    const gridStep = 18.0;
+    for (double x = 0; x < size.width; x += gridStep) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += gridStep) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final n = sides.length;
+    if (n < 3) return;
+
+    const padH = 50.0;
+    const padV = 36.0;
+    final drawW = size.width - (padH * 2);
+    final drawH = size.height - (padV * 2);
+
+    List<Offset> points = [];
+
+    if (shapeMode == 0 && n == 4) {
+      // Rectangle
+      points = [
+        const Offset(padH, padV),
+        Offset(padH + drawW, padV),
+        Offset(padH + drawW, padV + drawH),
+        Offset(padH, padV + drawH),
+      ];
+    } else if (shapeMode == 1 && n == 4) {
+      // Trapezoid: sides[0] = front, sides[1] = rear
+      final sideA = sides[0];
+      final sideB = sides[1];
+      final maxW = math.max(sideA, sideB);
+      final minW = math.min(sideA, sideB);
+      final ratio = maxW > 0 ? (minW / maxW).clamp(0.35, 1.0) : 0.8;
+      final isTopNarrow = sideA <= sideB;
+
+      final topW = isTopNarrow ? drawW * ratio : drawW;
+      final bottomW = isTopNarrow ? drawW : drawW * ratio;
+      final topOffset = (drawW - topW) / 2;
+      final bottomOffset = (drawW - bottomW) / 2;
+
+      points = [
+        Offset(padH + topOffset, padV),
+        Offset(padH + topOffset + topW, padV),
+        Offset(padH + bottomOffset + bottomW, padV + drawH),
+        Offset(padH + bottomOffset, padV + drawH),
+      ];
+    } else if (n == 4) {
+      // 4-Sided Quadrilateral
+      final sideA = sides[0];
+      final sideB = sides[1];
+      final sideC = sides[2];
+      final sideD = sides[3];
+      final maxH = math.max(sideC, sideD);
+      final leftH = maxH > 0 ? (sideC / maxH).clamp(0.45, 1.0) * drawH : drawH;
+      final rightH = maxH > 0 ? (sideD / maxH).clamp(0.45, 1.0) * drawH : drawH;
+
+      final maxW = math.max(sideA, sideB);
+      final topW = maxW > 0 ? (sideA / maxW).clamp(0.45, 1.0) * drawW : drawW;
+      final bottomW = maxW > 0 ? (sideB / maxW).clamp(0.45, 1.0) * drawW : drawW;
+
+      final topOffset = (drawW - topW) * 0.35;
+      final bottomOffset = (drawW - bottomW) * 0.65;
+      final leftOffset = (drawH - leftH) * 0.3;
+      final rightOffset = (drawH - rightH) * 0.7;
+
+      points = [
+        Offset(padH + topOffset, padV + leftOffset),
+        Offset(padH + topOffset + topW, padV + rightOffset),
+        Offset(padH + bottomOffset + bottomW, padV + rightOffset + rightH),
+        Offset(padH + bottomOffset, padV + leftOffset + leftH),
+      ];
+    } else {
+      // N-Sided Polygon (n = 3, 5, 6, 7...)
+      final center = Offset(size.width / 2, size.height / 2);
+      final radiusX = drawW / 2;
+      final radiusY = drawH / 2;
+      double sumS = 0;
+      for (final s in sides) {
+        sumS += s;
+      }
+      final avgS = sumS / n;
+
+      for (int i = 0; i < n; i++) {
+        final angle = -math.pi / 2 + (2 * math.pi * i / n);
+        final weight = avgS > 0 ? (sides[i] / avgS).clamp(0.75, 1.25) : 1.0;
+        final px = center.dx + (radiusX * weight) * math.cos(angle);
+        final py = center.dy + (radiusY * weight) * math.sin(angle);
+        points.add(Offset(px, py));
+      }
+    }
+
+    final path = Path()..moveTo(points[0].dx, points[0].dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    path.close();
+
+    // 3. Fill with soft glowing gradient
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        colors: [cobalt.withOpacity(0.18), cobalt.withOpacity(0.06)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fillPaint);
+
+    // 4. Perimeter border line
+    final strokePaint = Paint()
+      ..color = cobalt
+      ..strokeWidth = 2.4
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, strokePaint);
+
+    // 5. Corner Surveyor Pin Markers (A, B, C, D, E...)
+    for (int i = 0; i < points.length; i++) {
+      final label = String.fromCharCode(65 + (i % 26));
+      _drawPin(canvas, points[i], label, cobalt, yellow);
+    }
+  }
+
+  void _drawPin(Canvas canvas, Offset p, String label, Color col, Color yel) {
+    // Shadow
+    canvas.drawCircle(
+      p.translate(0, 1.2),
+      6.0,
+      Paint()
+        ..color = Colors.black.withOpacity(0.18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0),
+    );
+    // Outer pin body
+    canvas.drawCircle(p, 5.5, Paint()..color = col);
+    // Inner center white core
+    canvas.drawCircle(p, 2.6, Paint()..color = Colors.white);
+
+    // Letter badge
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(color: col, fontSize: 9.5, fontWeight: FontWeight.w900),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final lx = p.dx + (p.dx < 170 ? -14 : 7);
+    final ly = p.dy + (p.dy < 95 ? -13 : 5);
+    tp.paint(canvas, Offset(lx, ly));
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlotCadastralPainter old) {
+    if (old.shapeMode != shapeMode || old.sides.length != sides.length) return true;
+    for (int i = 0; i < sides.length; i++) {
+      if (old.sides[i] != sides[i]) return true;
+    }
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// RECURSIVE DESCENT MATH EXPRESSION EVALUATOR
+// ─────────────────────────────────────────────────────────────
+class _MathExpressionEvaluator {
+  final String text;
+  int _pos = 0;
+
+  _MathExpressionEvaluator(this.text);
+
+  double parse() {
+    final result = _parseExpression();
+    if (_pos < text.length) {
+      throw Exception('Unexpected character: ${text[_pos]}');
+    }
+    return result;
+  }
+
+  double _parseExpression() {
+    double value = _parseTerm();
+    while (_pos < text.length) {
+      final op = text[_pos];
+      if (op == '+' || op == '-') {
+        _pos++;
+        final nextTerm = _parseTerm();
+        if (op == '+') value += nextTerm;
+        if (op == '-') value -= nextTerm;
+      } else {
+        break;
+      }
+    }
+    return value;
+  }
+
+  double _parseTerm() {
+    double value = _parseFactor();
+    while (_pos < text.length) {
+      final op = text[_pos];
+      if (op == '*' || op == '/' || op == '%') {
+        _pos++;
+        final nextFactor = _parseFactor();
+        if (op == '*') value *= nextFactor;
+        if (op == '/') {
+          if (nextFactor == 0) throw Exception('Division by zero');
+          value /= nextFactor;
+        }
+        if (op == '%') value = value % nextFactor;
+      } else {
+        break;
+      }
+    }
+    return value;
+  }
+
+  double _parseFactor() {
+    if (_pos >= text.length) throw Exception('Unexpected end of expression');
+    if (text[_pos] == '+') {
+      _pos++;
+      return _parseFactor();
+    }
+    if (text[_pos] == '-') {
+      _pos++;
+      return -_parseFactor();
+    }
+    if (text[_pos] == '(') {
+      _pos++;
+      final value = _parseExpression();
+      if (_pos < text.length && text[_pos] == ')') {
+        _pos++;
+      }
+      return value;
+    }
+    final start = _pos;
+    while (_pos < text.length &&
+        ((text[_pos].codeUnitAt(0) >= 48 && text[_pos].codeUnitAt(0) <= 57) ||
+            text[_pos] == '.')) {
+      _pos++;
+    }
+    if (start == _pos) throw Exception('Expected number at position $_pos');
+    return double.parse(text.substring(start, _pos));
+  }
 }

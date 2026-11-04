@@ -856,7 +856,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 1. NEUMORPHIC GPS COMPASS DIAL & SQUIRCLE FEATURE TILES
+  // 1. NEUMORPHIC GPS COMPASS DIAL
   // ─────────────────────────────────────────────────────────────
   Widget _buildRich3DBadge() {
     return Column(
@@ -932,42 +932,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        // 4 Squircle Icon Tiles matching the reference image style
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildSquircleFeatureTile(Icons.satellite_alt_rounded),
-            const SizedBox(width: 14),
-            _buildSquircleFeatureTile(Icons.map_rounded),
-            const SizedBox(width: 14),
-            _buildSquircleFeatureTile(Icons.crop_free_rounded),
-            const SizedBox(width: 14),
-            _buildSquircleFeatureTile(Icons.straighten_rounded),
-          ],
-        ),
       ],
-    );
-  }
-
-  Widget _buildSquircleFeatureTile(IconData icon) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: _neuBg,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: neuExtrudedShadows(distance: 4, blur: 10),
-      ),
-      child: Center(
-        child: Icon(
-          icon,
-          color: _neuCobalt,
-          size: 22,
-        ),
-      ),
     );
   }
 
