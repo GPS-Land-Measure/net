@@ -2,19 +2,6 @@
 <html>
 
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -32,6 +19,26 @@
 
   <title>GPS Land Measure - វាស់ដី GPS</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Preconnect & Preload Khmer Fonts for Web & Mobile -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700;800;900&family=Battambang:wght@400;700;900&family=Noto+Sans+Khmer:wght@400;600;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    html, body {
+      font-family: 'Kantumruy Pro', 'Battambang', 'Noto Sans Khmer', -apple-system, BlinkMacSystemFont, 'Khmer Sangam MN', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #E8ECF2;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    flt-glass-pane {
+      font-family: 'Kantumruy Pro', 'Battambang', 'Noto Sans Khmer', -apple-system, 'Khmer Sangam MN', sans-serif !important;
+    }
+  </style>
+
   <!-- Google Sign-In Web Client ID & Google Identity Services SDK -->
   <meta name="google-signin-client_id"
     content="1059658557356-5iugf64fg9l2djkth48ef71e82qtb8g7.apps.googleusercontent.com">
@@ -39,14 +46,6 @@
 </head>
 
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 

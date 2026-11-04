@@ -31,6 +31,17 @@ class GpsMeasureApp extends StatelessWidget {
       title: 'GPS Land Measure',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        fontFamily: 'Kantumruy Pro',
+        fontFamilyFallback: const [
+          'Kantumruy Pro',
+          'Khmer UI',
+          'Battambang',
+          'Khmer Sangam MN',
+          'Noto Sans Khmer',
+          'Khmer OS Siemreap',
+          'Khmer OS',
+          'sans-serif',
+        ],
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.sunsetPink,
           brightness: Brightness.dark,

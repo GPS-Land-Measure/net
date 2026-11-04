@@ -169,10 +169,13 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadUserProfile();
     _loadLatestMeasurement();
-    _fetchLiveRealWorldWeather();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
+        // Defer background weather sync so UI renders instantly without freezing
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) _fetchLiveRealWorldWeather();
+        });
       }
     });
   }
@@ -2963,9 +2966,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (customLat == null && customLng == null) {
       try {
-        final perm = await Geolocator.checkPermission();
+        final perm = await Geolocator.checkPermission()
+            .timeout(const Duration(milliseconds: 1200), onTimeout: () => LocationPermission.denied);
         if (perm == LocationPermission.always || perm == LocationPermission.whileInUse) {
-          final pos = await Geolocator.getLastKnownPosition();
+          final pos = await Geolocator.getLastKnownPosition()
+              .timeout(const Duration(milliseconds: 1200), onTimeout: () => null);
           if (pos != null) {
             lat = pos.latitude;
             lng = pos.longitude;

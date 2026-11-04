@@ -30,3 +30,14 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
+    - assets/fonts/
+
+  fonts:
+    - family: Kantumruy Pro
+      fonts:
+        - asset: assets/fonts/KantumruyPro.ttf
+    - family: Khmer UI
+      fonts:
+        - asset: assets/fonts/KhmerUI.ttf
+        - asset: assets/fonts/KhmerUIb.ttf
+          weight: 700
