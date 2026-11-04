@@ -2567,131 +2567,93 @@ class _HomeScreenState extends State<HomeScreen> {
         ? _toKhmerDigits('$_weatherSatelliteCount')
         : '$_weatherSatelliteCount';
 
-    const double tileSize = 120.0; // EXACT 120x120 True Square ("ទំហំធំពេញភ្នែក ~120px" as requested!)
-    const double gap = 10.0;
-    const double totalGridWidth = 3 * tileSize + 2 * gap; // 344.0
-    const double totalGridHeight = 2 * tileSize + gap;     // 226.0
-
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Center(
-        child: SizedBox(
-          width: totalGridWidth,
-          height: totalGridHeight,
-          child: Stack(
-            clipBehavior: Clip.none,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const double gap = 11.0;
+          final double cardWidth = (constraints.maxWidth - 2 * gap) / 3;
+          final double cardHeight = cardWidth * 1.05;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // 1. Horizontal Divider Line between Row 1 and Row 2
-              Positioned(
-                left: -12,
-                right: -12,
-                top: tileSize + gap / 2 - 0.6,
-                child: Container(
-                  height: 1.2,
-                  color: _neuDarkShadow.withOpacity(0.32),
-                ),
-              ),
-
-              // 2. Vertical Divider Line 1 (between Column 1 and Column 2)
-              Positioned(
-                top: -10,
-                bottom: -10,
-                left: tileSize + gap / 2 - 0.6,
-                child: Container(
-                  width: 1.2,
-                  color: _neuDarkShadow.withOpacity(0.32),
-                ),
-              ),
-
-              // 3. Vertical Divider Line 2 (between Column 2 and Column 3)
-              Positioned(
-                top: -10,
-                bottom: -10,
-                left: 2 * tileSize + gap * 1.5 - 0.6,
-                child: Container(
-                  width: 1.2,
-                  color: _neuDarkShadow.withOpacity(0.32),
-                ),
-              ),
-
-              // 3x2 Grid Tiles (3 Columns x 2 Rows = 6 True Squares 108x108)
-              Column(
-                mainAxisSize: MainAxisSize.min,
+              // Row 1: Area (Ha), Land Pins (កន្លែង), Altitude (m)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildCompactMetricTile(
-                        icon: Icons.layers_rounded,
-                        gradientColors: const [Color(0xFF059669), Color(0xFF10B981)], // Emerald Green
-                        value: areaHectare,
-                        unit: 'Ha',
-                        title: 'ទំហំហិកតា',
-                        tileSize: tileSize,
-                        onTap: () => _showAreaDetailsModal(context),
-                      ),
-                      const SizedBox(width: gap),
-                      _buildCompactMetricTile(
-                        icon: Icons.pin_drop_rounded,
-                        gradientColors: const [_neuCobaltDark, _neuCobalt], // Royal Cobalt
-                        value: pointsCount,
-                        unit: 'កន្លែង',
-                        title: 'បង្គោលដី',
-                        tileSize: tileSize,
-                        onTap: () => _showPointsDetailsModal(context),
-                      ),
-                      const SizedBox(width: gap),
-                      _buildCompactMetricTile(
-                        icon: Icons.filter_hdr_rounded,
-                        gradientColors: const [Color(0xFF7C3AED), Color(0xFFA855F7)], // Royal Purple
-                        value: altitudeStr,
-                        unit: 'm',
-                        title: 'កម្ពស់ដី',
-                        tileSize: tileSize,
-                        onTap: () => _showAltitudeDetailsModal(context),
-                      ),
-                    ],
+                  _buildCompactMetricTile(
+                    icon: Icons.layers_rounded,
+                    gradientColors: const [Color(0xFF059669), Color(0xFF10B981)], // Emerald Green
+                    value: areaHectare,
+                    unit: 'Ha',
+                    title: 'ទំហំហិកតា',
+                    width: cardWidth,
+                    height: cardHeight,
+                    onTap: () => _showAreaDetailsModal(context),
                   ),
-                  const SizedBox(height: gap),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildCompactMetricTile(
-                        icon: Icons.gps_fixed_rounded,
-                        gradientColors: const [Color(0xFF0284C7), Color(0xFF38BDF8)], // Electric Cyan
-                        value: accuracy,
-                        unit: 'm',
-                        title: 'GPS ច្បាស់',
-                        tileSize: tileSize,
-                        onTap: () => _showGpsAccuracyModal(context),
-                      ),
-                      const SizedBox(width: gap),
-                      _buildCompactMetricTile(
-                        icon: Icons.straighten_rounded,
-                        gradientColors: const [Color(0xFFD97706), Color(0xFFF59E0B)], // Warm Amber
-                        value: perimeter,
-                        unit: 'm',
-                        title: 'ប្រវែងជុំវិញ',
-                        tileSize: tileSize,
-                        onTap: () => _showPerimeterDetailsModal(context),
-                      ),
-                      const SizedBox(width: gap),
-                      _buildCompactMetricTile(
-                        icon: Icons.satellite_alt_rounded,
-                        gradientColors: const [Color(0xFFE11D48), Color(0xFFFB7185)], // Vivid Rose Pink
-                        value: satellitesStr,
-                        unit: 'គ្រាប់',
-                        title: 'ផ្កាយរណប',
-                        tileSize: tileSize,
-                        onTap: () => _showSatellitesDetailsModal(context),
-                      ),
-                    ],
+                  _buildCompactMetricTile(
+                    icon: Icons.pin_drop_rounded,
+                    gradientColors: const [_neuCobaltDark, Color(0xFF2563EB)], // Royal Cobalt
+                    value: pointsCount,
+                    unit: 'កន្លែង',
+                    title: 'បង្គោលដី',
+                    width: cardWidth,
+                    height: cardHeight,
+                    onTap: () => _showPointsDetailsModal(context),
+                  ),
+                  _buildCompactMetricTile(
+                    icon: Icons.filter_hdr_rounded,
+                    gradientColors: const [Color(0xFF7C3AED), Color(0xFFA855F7)], // Royal Purple
+                    value: altitudeStr,
+                    unit: 'm',
+                    title: 'កម្ពស់ដី',
+                    width: cardWidth,
+                    height: cardHeight,
+                    onTap: () => _showAltitudeDetailsModal(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: gap),
+              // Row 2: GPS Accuracy, Perimeter, Satellites
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildCompactMetricTile(
+                    icon: Icons.gps_fixed_rounded,
+                    gradientColors: const [Color(0xFF0284C7), Color(0xFF38BDF8)], // Electric Cyan
+                    value: accuracy,
+                    unit: 'm',
+                    title: 'GPS ច្បាស់',
+                    width: cardWidth,
+                    height: cardHeight,
+                    onTap: () => _showGpsAccuracyModal(context),
+                  ),
+                  _buildCompactMetricTile(
+                    icon: Icons.straighten_rounded,
+                    gradientColors: const [Color(0xFFD97706), Color(0xFFF59E0B)], // Warm Amber
+                    value: perimeter,
+                    unit: 'm',
+                    title: 'ប្រវែងជុំវិញ',
+                    width: cardWidth,
+                    height: cardHeight,
+                    onTap: () => _showPerimeterDetailsModal(context),
+                  ),
+                  _buildCompactMetricTile(
+                    icon: Icons.satellite_alt_rounded,
+                    gradientColors: const [Color(0xFFE11D48), Color(0xFFFB7185)], // Vivid Rose Pink
+                    value: satellitesStr,
+                    unit: 'គ្រាប់',
+                    title: 'ផ្កាយរណប',
+                    width: cardWidth,
+                    height: cardHeight,
+                    onTap: () => _showSatellitesDetailsModal(context),
                   ),
                 ],
               ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -2702,113 +2664,148 @@ class _HomeScreenState extends State<HomeScreen> {
     required String value,
     required String unit,
     required String title,
-    required double tileSize,
+    required double width,
+    required double height,
     required VoidCallback onTap,
   }) {
     final primaryColor = gradientColors.first;
 
     return SizedBox(
-      width: tileSize,
-      height: tileSize, // EXACT 1:1 TRUE SQUARE (120x120 បួនជ្រុងស្មើ និងធំពេញភ្នែក!)
+      width: width,
+      height: height,
       child: Container(
         decoration: BoxDecoration(
-          color: _neuBg,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: neuExtrudedShadows(distance: 2.5, blur: 7),
-          border: Border.all(color: Colors.white, width: 1.2),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFF7F9FC),
+              _neuBg,
+              Color(0xFFDFE4ED),
+            ],
+            stops: [0.0, 0.45, 1.0],
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.95),
+            width: 1.5,
+          ),
+          boxShadow: [
+            const BoxShadow(
+              color: Colors.white,
+              offset: Offset(-3.5, -3.5),
+              blurRadius: 9,
+            ),
+            BoxShadow(
+              color: _neuDarkShadow.withOpacity(0.72),
+              offset: const Offset(4, 5),
+              blurRadius: 11,
+            ),
+            BoxShadow(
+              color: primaryColor.withOpacity(0.08),
+              offset: const Offset(0, 3),
+              blurRadius: 8,
+            ),
+          ],
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(18),
-            splashColor: primaryColor.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(22),
+            splashColor: primaryColor.withOpacity(0.18),
             highlightColor: primaryColor.withOpacity(0.08),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // 1. Centered 40x40 Gradient 3D Squircle with 24px Crisp White Icon
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: gradientColors,
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.9), width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryColor.withOpacity(0.38),
-                            blurRadius: 7,
-                            offset: const Offset(0, 2.5),
-                          ),
-                        ],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // 1. 3D Embossed Jewel Icon Squircle (with specular reflection)
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: gradientColors,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      child: Center(
-                        child: Icon(
-                          icon,
-                          color: Colors.white,
-                          size: 24,
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.88),
+                        width: 1.3,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryColor.withOpacity(0.40),
+                          blurRadius: 7,
+                          offset: const Offset(0, 3),
                         ),
+                        const BoxShadow(
+                          color: Colors.white,
+                          blurRadius: 3,
+                          offset: Offset(-1, -1),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: 21,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                  ),
+                  const SizedBox(height: 6),
 
-                    // 2. Centered Value + Unit
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
+                  // 2. High-Precision Survey Value & Unit
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Flexible(
+                        child: Text(
                           value,
                           maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _neuTextDark,
                             fontSize: 16.5,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: -0.2,
+                            letterSpacing: -0.3,
                           ),
                         ),
-                        const SizedBox(width: 3),
-                        Text(
-                          unit,
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-
-                    // 3. Centered Category Title
-                    Text(
-                      title,
-                      maxLines: 1,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: _neuTextMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
                       ),
+                      const SizedBox(width: 2.5),
+                      Text(
+                        unit,
+                        style: TextStyle(
+                          color: primaryColor,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2.5),
+
+                  // 3. Khmer Precision Metric Title
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _neuTextMuted.withOpacity(0.95),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
