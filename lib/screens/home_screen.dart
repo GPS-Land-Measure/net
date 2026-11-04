@@ -3128,7 +3128,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView.separated(
                 physics: const BouncingScrollPhysics(),
                 itemCount: locations.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final loc = locations[index];
                   final isCurrent = _weatherLocationName == loc['name'];
