@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:google_sign_in_web/web_only.dart' as web_gis;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_screen.dart';
 
@@ -17,8 +14,8 @@ class _LoginScreenState extends State<LoginScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _regFormKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'admin@gpsmeasure.com');
-  final _passwordController = TextEditingController(text: '1234');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   // ── Registration State ──
   final _regNameController = TextEditingController();
@@ -34,14 +31,8 @@ class _LoginScreenState extends State<LoginScreen>
   bool _obscurePassword = true;
   bool _rememberMe = true;
   bool _isLoading = false;
-  final bool _isGoogleLoading = false;
+  bool _isGoogleLoading = false;
   String? _errorMessage;
-
-  // Google Cloud Project: third-light-513301-c2 (Project Number: 1059658557356)
-  String googleWebClientId =
-      '1059658557356-5iugf64fg9l2djkth48ef71e82qtb8g7.apps.googleusercontent.com';
-  static bool _isGoogleInitialized = false;
-  StreamSubscription<GoogleSignInAuthenticationEvent>? _authEventsSub;
 
   // ── NEUMORPHIC SOFT UI PALETTE (Matches user's reference image) ──
   static const Color _neuBg = Color(0xFFE8ECF2); // Soft ceramic matte background
@@ -95,7 +86,6 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
     _checkSavedGoogleAccount();
-    _initGoogleSignInWeb();
 
     _fadeCtrl = AnimationController(
       vsync: this,
@@ -120,7 +110,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _authEventsSub?.cancel();
     _fadeCtrl.dispose();
     _floatCtrl.dispose();
     _emailController.dispose();
@@ -162,20 +151,30 @@ class _LoginScreenState extends State<LoginScreen>
       final savedEmail = prefs.getString('user_email');
       final savedPassword = prefs.getString('user_password');
 
-      if (((email == 'admin@gpsmeasure.com' || email == 'admin') && password == '1234') ||
-          (savedEmail != null && email.toLowerCase() == savedEmail.toLowerCase() && password == savedPassword)) {
-        await prefs.setBool('is_logged_in', true);
+      // Check if registered user password matches
+      if (savedEmail != null && savedPassword != null && savedPassword.isNotEmpty &&
+          email.toLowerCase() == savedEmail.toLowerCase() && password != savedPassword) {
         if (!mounted) return;
-        _navigateToHome();
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'លេខសម្ងាត់មិនត្រឹមត្រូវទេ!';
+        });
         return;
       }
-    } catch (_) {}
 
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _errorMessage = 'អ៊ីមែល ឬលេខសម្ងាត់មិនត្រឹមត្រូវទេ!';
-    });
+      // Valid login: persist session & profile
+      await prefs.setBool('is_logged_in', true);
+      await prefs.setString('user_email', email);
+      if (prefs.getString('user_name') == null || prefs.getString('user_name')!.isEmpty) {
+        await prefs.setString('user_name', email.split('@').first);
+      }
+      await prefs.setString('user_password', password);
+      await prefs.setString('user_provider', email.toLowerCase().endsWith('@gmail.com') ? 'Google' : 'Surveyor Account');
+
+      if (!mounted) return;
+      _navigateToHome();
+      return;
+    } catch (_) {}
   }
 
   Future<void> _handleRegister() async {
@@ -240,39 +239,6 @@ class _LoginScreenState extends State<LoginScreen>
         }
       }
     } catch (_) {}
-  }
-
-  Future<void> _initGoogleSignInWeb() async {
-    if (!_isGoogleInitialized) {
-      try {
-        await GoogleSignIn.instance.initialize(
-          clientId: kIsWeb ? googleWebClientId : null,
-        );
-        _isGoogleInitialized = true;
-      } catch (_) {
-        _isGoogleInitialized = true;
-      }
-    }
-
-    _authEventsSub = GoogleSignIn.instance.authenticationEvents.listen((event) async {
-      if (event is GoogleSignInAuthenticationEventSignIn) {
-        final account = event.user;
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('is_logged_in', true);
-          await prefs.setString('user_email', account.email);
-          await prefs.setString('user_name', account.displayName ?? account.email.split('@').first);
-          await prefs.setString('user_provider', 'Google');
-          if (account.photoUrl != null) {
-            await prefs.setString('user_photo', account.photoUrl!);
-          }
-        } catch (_) {}
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).clearSnackBars();
-        _navigateToHome();
-      }
-    });
   }
 
   void _handleGoogleLogin() {
@@ -422,44 +388,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-
-                  // Official Google GIS Button on Web
-                  if (kIsWeb) ...[
-                    Container(
-                      height: 48,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      alignment: Alignment.center,
-                      child: web_gis.renderButton(
-                        configuration: web_gis.GSIButtonConfiguration(
-                          type: web_gis.GSIButtonType.standard,
-                          theme: web_gis.GSIButtonTheme.filledBlue,
-                          size: web_gis.GSIButtonSize.large,
-                          text: web_gis.GSIButtonText.signinWith,
-                          shape: web_gis.GSIButtonShape.pill,
-                          minimumWidth: 300,
-                        ),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(child: Container(height: 1, color: _neuTextMuted.withOpacity(0.2))),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'ឬ ចូលរហ័សដោយផ្ទាល់ (Instant 1-Tap)',
-                            style: TextStyle(
-                              color: _neuTextMuted,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        Expanded(child: Container(height: 1, color: _neuTextMuted.withOpacity(0.2))),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                  ],
+                  const SizedBox(height: 10),
 
                   if (modalError != null) ...[
                     Container(
@@ -1108,10 +1037,10 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 8),
                   _buildTextField(
                     controller: _emailController,
-                    hint: 'admin@gpsmeasure.com',
+                    hint: 'ឧ. surveyor@gmail.com ឬ ឈ្មោះគណនី',
                     icon: Icons.mail_outline_rounded,
                     validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'សូមបញ្ចូលអ៊ីមែល' : null,
+                        (v == null || v.trim().isEmpty) ? 'សូមបញ្ចូលអ៊ីមែល ឬ ឈ្មោះគណនី' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -1120,7 +1049,7 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 8),
                   _buildTextField(
                     controller: _passwordController,
-                    hint: '••••••••',
+                    hint: 'វាយបញ្ចូលលេខសម្ងាត់...',
                     icon: Icons.lock_outline_rounded,
                     isPassword: true,
                     obscure: _obscurePassword,
