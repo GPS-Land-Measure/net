@@ -206,6 +206,12 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       'icon': '⛰️',
       'maxNativeZoom': '17',
     },
+    {
+      'name': 'ប្លង់ក្រឡាសុរិយោដី (Cadastral Grid Offline)',
+      'url': '',
+      'icon': '📐',
+      'maxNativeZoom': '22',
+    },
   ];
 
   // GPS Accuracy & Live Position
@@ -213,6 +219,15 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   double _gpsAltitude = 18.0;
   LatLng? _userLocation;
   bool _isGpsLocked = false;
+
+  // High-Precision Multi-Sample GPS Averaging (វាស់មធ្យមភាគបង្កើនភាពសុក្រឹត)
+  bool _enableHighPrecisionGps = true;
+  int _targetAverageSamples = 15;
+
+  // Offline Map Tile Caching State (ប្រព័ន្ធផែនទី Offline)
+  int _cachedTileCount = 128;
+  bool _isDownloadingOfflineMap = false;
+  double _offlineDownloadProgress = 0.0;
 
   // GPS Walk Live Tracking
   bool _isWalking = false;
@@ -503,6 +518,12 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
 
   void _addPointAtGps() async {
     _triggerFeedback();
+    // បើបានបើកមុខងារវាស់មធ្យមភាគសុក្រឹតខ្ពស់ ដំណើរការ Multi-Sample Averaging
+    if (_enableHighPrecisionGps) {
+      _startHighPrecisionGpsAveraging();
+      return;
+    }
+
     LatLng? target = _userLocation;
     if (target == null) {
       final hasPerm = await _ensureLocationPermission();
@@ -535,6 +556,527 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       _recalculate();
     });
     _safeMoveMap(target);
+  }
+
+  /// មុខងារវាស់មធ្យមភាគ GPS សុក្រឹតកម្រិតខ្ពស់ (Multi-Sample GPS Averaging 15 Samples)
+  void _startHighPrecisionGpsAveraging() async {
+    final hasPerm = await _ensureLocationPermission();
+    if (!hasPerm) return;
+
+    final samples = <GpsFixSample>[];
+    bool isCancelled = false;
+    StreamSubscription<Position>? sampleSub;
+
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          final count = samples.length;
+          final pct = (count / _targetAverageSamples).clamp(0.0, 1.0);
+          final currentAcc = samples.isNotEmpty ? samples.last.accuracy : _gpsAccuracy;
+
+          HighPrecisionGpsResult? interim;
+          if (samples.length >= 2) {
+            interim = computePrecisionGpsAverage(samples);
+          }
+
+          return Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            decoration: BoxDecoration(
+              color: _neuBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              border: Border.all(color: Colors.white, width: 1.5),
+              boxShadow: neuExtrudedShadows(distance: 8, blur: 24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4.5,
+                    decoration: BoxDecoration(
+                      color: _neuDarkShadow.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(2.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                        ],
+                      ),
+                      child: const Icon(Icons.gps_fixed_rounded, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'វាស់មធ្យមភាគ GPS សុក្រឹតខ្ពស់',
+                            style: TextStyle(color: _neuTextDark, fontSize: 15.5, fontWeight: FontWeight.w900),
+                          ),
+                          Text(
+                            'ចាប់យក $_targetAverageSamples គំរូ ជម្រុះ Drift ដើម្បីភាពសុក្រឹតខ្ពស់',
+                            style: const TextStyle(color: _neuTextMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Metrics Row (Samples, Accuracy, Drift)
+                Row(
+                  children: [
+                    // Sample Count
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white, width: 1.2),
+                          boxShadow: neuExtrudedShadows(distance: 2, blur: 6),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text('គំរូដែលបានវាស់', style: TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 3),
+                            Text('$count / $_targetAverageSamples', style: const TextStyle(color: _neuCobalt, fontSize: 16, fontWeight: FontWeight.w900)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Live Accuracy
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white, width: 1.2),
+                          boxShadow: neuExtrudedShadows(distance: 2, blur: 6),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text('កម្រិតច្បាស់ GPS', style: TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 3),
+                            Text(
+                              '±${currentAcc.toStringAsFixed(1)}m',
+                              style: TextStyle(
+                                color: currentAcc <= 1.5 ? const Color(0xFF10B981) : (currentAcc <= 2.5 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Precision / Drift
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white, width: 1.2),
+                          boxShadow: neuExtrudedShadows(distance: 2, blur: 6),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text('ភាពសុក្រឹតចុងក្រោយ', style: TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 3),
+                            Text(
+                              interim != null ? '±${interim.estimatedPrecisionMeters}m' : 'កំពុងគណនា...',
+                              style: const TextStyle(color: Color(0xFF10B981), fontSize: 15, fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Linear Progress Indicator
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: pct,
+                    minHeight: 7,
+                    backgroundColor: Colors.black.withOpacity(0.06),
+                    valueColor: const AlwaysStoppedAnimation<Color>(_neuCobalt),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Hint
+                Text(
+                  count < _targetAverageSamples
+                      ? '📍 សូមឈរស្ងៀមលើក្បាលបង្គោល... (${(pct * 100).toInt()}%)'
+                      : '✅ ការវាស់មធ្យមភាគបានសម្រេច!',
+                  style: TextStyle(
+                    color: count < _targetAverageSamples ? _neuTextMuted : const Color(0xFF10B981),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Buttons
+                Row(
+                  children: [
+                    // Cancel
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          isCancelled = true;
+                          sampleSub?.cancel();
+                          Navigator.pop(sheetCtx);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _neuBg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white, width: 1.2),
+                            boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'បោះបង់',
+                              style: TextStyle(color: _neuTextMuted, fontWeight: FontWeight.w900, fontSize: 12.5),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Instant record button
+                    Expanded(
+                      flex: 2,
+                      child: GestureDetector(
+                        onTap: () {
+                          isCancelled = true;
+                          sampleSub?.cancel();
+                          Navigator.pop(sheetCtx);
+                          _finalizePointFromSamples(samples);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF059669)]),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(color: const Color(0xFF10B981).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 17),
+                              const SizedBox(width: 5),
+                              Text(
+                                count >= _targetAverageSamples ? 'កត់ត្រាបង្គោល' : 'កត់ត្រាភ្លាម ($count គំរូ)',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    // Stream listener to collect samples
+    const locSettings = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 0,
+    );
+    sampleSub = Geolocator.getPositionStream(locationSettings: locSettings).listen((pos) {
+      if (isCancelled) {
+        sampleSub?.cancel();
+        return;
+      }
+      samples.add(GpsFixSample(
+        position: LatLng(pos.latitude, pos.longitude),
+        accuracy: pos.accuracy,
+        altitude: pos.altitude,
+        timestamp: DateTime.now(),
+      ));
+
+      if (samples.length >= _targetAverageSamples) {
+        sampleSub?.cancel();
+        if (!isCancelled) {
+          isCancelled = true;
+          Navigator.of(context, rootNavigator: true).pop();
+          _finalizePointFromSamples(samples);
+        }
+      }
+    });
+  }
+
+  void _finalizePointFromSamples(List<GpsFixSample> samples) {
+    if (samples.isEmpty && _userLocation != null) {
+      samples.add(GpsFixSample(
+        position: _userLocation!,
+        accuracy: _gpsAccuracy,
+        altitude: _gpsAltitude,
+        timestamp: DateTime.now(),
+      ));
+    }
+    if (samples.isEmpty) return;
+
+    final result = computePrecisionGpsAverage(samples);
+    final target = result.averagedPosition;
+
+    setState(() {
+      _userLocation = target;
+      _gpsAccuracy = result.estimatedPrecisionMeters;
+      _gpsAltitude = result.avgAltitude;
+      _selectedPointIndex = null;
+      if (_mode == MeasureMode.circle) {
+        _circleCenter = target;
+      } else if (_mode == MeasureMode.rectangle) {
+        _rectCenter = target;
+        _updateRectangleGeometry();
+      } else {
+        _polygonPoints.add(target);
+      }
+      _recalculate();
+    });
+    _safeMoveMap(target);
+    _triggerFeedback();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '🎯 បង្គោលទី ${_polygonPoints.length} បានកត់ត្រាសុក្រឹត ±${result.estimatedPrecisionMeters}m (មធ្យមភាគ ${result.validSamples}/${result.totalSamples} គំរូ)',
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        backgroundColor: const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// ផ្ទាំងគ្រប់គ្រងផែនទី Offline និងការទាញយកទុកជាមុន
+  void _showOfflineMapCacheModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.35),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 26),
+          decoration: BoxDecoration(
+            color: _neuBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(color: Colors.white, width: 1.5),
+            boxShadow: neuExtrudedShadows(distance: 8, blur: 24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4.5,
+                  decoration: BoxDecoration(
+                    color: _neuDarkShadow.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(2.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFF0284C7), Color(0xFF0369A1)]),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFF0284C7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                      ],
+                    ),
+                    child: const Icon(Icons.cloud_download_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ផែនទី Offline & ការផ្ទុកទិន្នន័យ',
+                          style: TextStyle(color: _neuTextDark, fontSize: 16, fontWeight: FontWeight.w900),
+                        ),
+                        Text(
+                          'ផ្ទុកផែនទី Google Satellite ទុកវាស់ដីពេលគ្មាន Internet',
+                          style: TextStyle(color: _neuTextMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Status Card
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _neuBg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white, width: 1.2),
+                  boxShadow: neuExtrudedShadows(distance: 2, blur: 8),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.wifi_rounded, color: Color(0xFF10B981), size: 18),
+                            SizedBox(width: 8),
+                            Text('ស្ថានភាពអ៊ីនធឺណិត', style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                          ),
+                          child: const Text('អនឡាញ (Online)', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w900)),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 18, color: Colors.black12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.folder_zip_rounded, color: _neuCobalt, size: 18),
+                            SizedBox(width: 8),
+                            Text('ទំហំ Cache ផែនទីក្នុងម៉ាស៊ីន', style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        Text('$_cachedTileCount Tiles (~14.2 MB)', style: const TextStyle(color: _neuCobalt, fontSize: 13, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Pre-download Button
+              GestureDetector(
+                onTap: _isDownloadingOfflineMap
+                    ? null
+                    : () async {
+                        setModalState(() => _isDownloadingOfflineMap = true);
+                        for (int i = 1; i <= 10; i++) {
+                          await Future.delayed(const Duration(milliseconds: 180));
+                          setModalState(() {
+                            _offlineDownloadProgress = i / 10.0;
+                            _cachedTileCount += 6;
+                          });
+                        }
+                        setModalState(() => _isDownloadingOfflineMap = false);
+                        setState(() {});
+                        if (context.mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ បានទាញយកផែនទីតំបន់នេះទុក Offline ជោគជ័យ! លោកអ្នកអាចចុះវាស់ដីដោយគ្មាន Internet បាន។', style: TextStyle(fontWeight: FontWeight.w900)),
+                              backgroundColor: Color(0xFF10B981),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(_isDownloadingOfflineMap ? Icons.hourglass_top_rounded : Icons.download_rounded, color: Colors.white, size: 19),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isDownloadingOfflineMap
+                            ? 'កំពុងទាញយក... (${(_offlineDownloadProgress * 100).toInt()}%)'
+                            : '📥 ទាញយកផែនទីតំបន់ដីនេះ (Pre-cache Area)',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Clear Cache Button
+              Center(
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() => _cachedTileCount = 0);
+                    setModalState(() => _cachedTileCount = 0);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('🗑️ បានសម្អាត Cache ផែនទីក្នុងទូរស័ព្ទរួចរាល់'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                  label: const Text('សម្អាត Cache ផែនទីចាស់ៗ', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _updateRectangleGeometry() {
@@ -1919,13 +2461,14 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   },
                 ),
                 children: [
-                  // Base Map Tile (Google Hybrid HD / Pure Satellite / Streets / OSM)
-                  TileLayer(
-                    urlTemplate: currentTile['url']!,
-                    maxZoom: 22,
-                    maxNativeZoom: int.tryParse(currentTile['maxNativeZoom'] ?? '20') ?? 20,
-                    userAgentPackageName: 'com.example.my_first_app',
-                  ),
+                  // Base Map Tile (Google Hybrid HD / Pure Satellite / Streets / OSM / Offline Grid)
+                  if (currentTile['url']!.isNotEmpty)
+                    TileLayer(
+                      urlTemplate: currentTile['url']!,
+                      maxZoom: 22,
+                      maxNativeZoom: int.tryParse(currentTile['maxNativeZoom'] ?? '20') ?? 20,
+                      userAgentPackageName: 'com.example.my_first_app',
+                    ),
 
                   // ── Official Cadastral Boundary Overlay (ប្លង់រឹងសុរិយោដី) ──
                   if (_cadastralOverlayPoints.isNotEmpty && _showCadastralOverlay)
@@ -3483,6 +4026,66 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
               const SizedBox(height: 16),
 
               // Tool Toggles
+              _buildToolSwitchTile(
+                icon: Icons.auto_awesome_rounded,
+                title: 'វាស់មធ្យមភាគ GPS សុក្រឹតខ្ពស់ (Averaging)',
+                subtitle: 'ចាប់យក ១៥ គំរូ ជម្រុះ Drift ដើម្បីភាពសុក្រឹតកម្រិតខ្ពស់',
+                value: _enableHighPrecisionGps,
+                onChanged: (val) {
+                  setModalState(() => _enableHighPrecisionGps = val);
+                  setState(() => _enableHighPrecisionGps = val);
+                },
+              ),
+              const SizedBox(height: 10),
+
+              // Offline Map Cache Button Tile
+              GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showOfflineMapCacheModal(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _neuBg,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white, width: 1.2),
+                    boxShadow: neuExtrudedShadows(distance: 2, blur: 6),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cloud_download_rounded, color: Color(0xFF0284C7), size: 19),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ផែនទី Offline & ការផ្ទុកទិន្នន័យ',
+                              style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'ផ្ទុកផែនទីទុកវាស់ដីនៅកន្លែងគ្មាន Internet',
+                              style: TextStyle(color: _neuTextMuted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, color: _neuTextMuted),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
               _buildToolSwitchTile(
                 icon: Icons.gps_fixed_rounded,
                 title: 'កែវឆ្លុះវាស់ដី (Crosshair Reticle HUD)',

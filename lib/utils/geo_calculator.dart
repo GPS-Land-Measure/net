@@ -555,3 +555,132 @@ ParsedMapLocation? parseMapUrlOrCoordinates(String text) {
 
   return null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HIGH-PRECISION MULTI-SAMPLE GPS AVERAGING (ក្បួនវាស់មធ្យមភាគបង្កើនភាពសុក្រឹត)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// គំរូទិន្នន័យ GPS មួយចំណុចសម្រាប់គណនាមធ្យមភាគ
+class GpsFixSample {
+  final LatLng position;
+  final double accuracy; // ភាពមិនច្បាស់ (ម៉ែត្រ)
+  final double altitude; // កម្ពស់ (ម៉ែត្រ)
+  final DateTime timestamp;
+
+  GpsFixSample({
+    required this.position,
+    required this.accuracy,
+    required this.altitude,
+    required this.timestamp,
+  });
+}
+
+/// លទ្ធផលនៃការវាស់មធ្យមភាគសុក្រឹតកម្រិតខ្ពស់
+class HighPrecisionGpsResult {
+  final LatLng averagedPosition;
+  final double estimatedPrecisionMeters; // ភាពសុក្រឹតចុងក្រោយ (±ម៉ែត្រ)
+  final double avgAltitude;
+  final int totalSamples;
+  final int validSamples;
+  final double horizontalDriftMeters; // កម្រិតរអិលអតិបរមា
+
+  HighPrecisionGpsResult({
+    required this.averagedPosition,
+    required this.estimatedPrecisionMeters,
+    required this.avgAltitude,
+    required this.totalSamples,
+    required this.validSamples,
+    required this.horizontalDriftMeters,
+  });
+}
+
+/// គណនាមធ្យមភាគកូអរដោនេដោយប្រើរូបមន្ត Inverse-Variance Weighting & 2-Sigma Outlier Filtering
+HighPrecisionGpsResult computePrecisionGpsAverage(List<GpsFixSample> samples) {
+  if (samples.isEmpty) {
+    return HighPrecisionGpsResult(
+      averagedPosition: const LatLng(0, 0),
+      estimatedPrecisionMeters: 99.0,
+      avgAltitude: 0,
+      totalSamples: 0,
+      validSamples: 0,
+      horizontalDriftMeters: 0,
+    );
+  }
+
+  if (samples.length == 1) {
+    return HighPrecisionGpsResult(
+      averagedPosition: samples.first.position,
+      estimatedPrecisionMeters: samples.first.accuracy,
+      avgAltitude: samples.first.altitude,
+      totalSamples: 1,
+      validSamples: 1,
+      horizontalDriftMeters: 0,
+    );
+  }
+
+  // 1. គណនា Median ដើម្បីពិនិត្យរក Outliers (ចំណុចដែលលោតខុសប្រក្រតី)
+  final lats = samples.map((s) => s.position.latitude).toList()..sort();
+  final lngs = samples.map((s) => s.position.longitude).toList()..sort();
+  final medianCenter = LatLng(
+    lats[lats.length ~/ 2],
+    lngs[lngs.length ~/ 2],
+  );
+
+  // 2. គណនាគម្លាតពី Median គិតជាម៉ែត្រ
+  final distances = samples.map((s) => haversineDistance(s.position, medianCenter)).toList();
+  final meanDist = distances.reduce((a, b) => a + b) / distances.length;
+  final variance = distances.map((d) => math.pow(d - meanDist, 2)).reduce((a, b) => a + b) / distances.length;
+  final stdDev = math.sqrt(variance);
+
+  // 3. ជម្រុះចោលគំរូណាដែលលោតឆ្ងាយលើសពី 2-Sigma (> 2 * stdDev)
+  final validSamples = <GpsFixSample>[];
+  for (int i = 0; i < samples.length; i++) {
+    // រក្សាទុកបើសិនស្ថិតក្នុងរង្វង់ 2-Sigma ឬគម្លាត < 1.5 ម៉ែត្រ
+    if (stdDev < 0.5 || distances[i] <= math.max(1.5, meanDist + 2.0 * stdDev)) {
+      validSamples.add(samples[i]);
+    }
+  }
+
+  final finalPool = validSamples.isNotEmpty ? validSamples : samples;
+
+  // 4. គណនា Weighted Average ដោយផ្អែកលើ Accuracy (Inverse-Variance)
+  double sumWeights = 0.0;
+  double weightedLat = 0.0;
+  double weightedLng = 0.0;
+  double weightedAlt = 0.0;
+  double maxDrift = 0.0;
+
+  for (final s in finalPool) {
+    // ទម្ងន់ w = 1 / (accuracy^2) - កាន់តែច្បាស់ ទម្ងន់កាន់តែធំ
+    final safeAcc = math.max(0.2, s.accuracy);
+    final w = 1.0 / (safeAcc * safeAcc);
+    sumWeights += w;
+    weightedLat += s.position.latitude * w;
+    weightedLng += s.position.longitude * w;
+    weightedAlt += s.altitude * w;
+  }
+
+  final avgLat = weightedLat / sumWeights;
+  final avgLng = weightedLng / sumWeights;
+  final avgAlt = weightedAlt / sumWeights;
+  final avgPos = LatLng(avgLat, avgLng);
+
+  for (final s in finalPool) {
+    final d = haversineDistance(s.position, avgPos);
+    if (d > maxDrift) maxDrift = d;
+  }
+
+  // 5. ភាពសុក្រឹតរួម Standard Error of the Mean (SEM)
+  final theoreticalError = 1.0 / math.sqrt(sumWeights);
+  final empiricalPrecision = math.max(0.15, math.min(theoreticalError, maxDrift));
+
+  return HighPrecisionGpsResult(
+    averagedPosition: avgPos,
+    estimatedPrecisionMeters: double.parse(empiricalPrecision.toStringAsFixed(2)),
+    avgAltitude: double.parse(avgAlt.toStringAsFixed(1)),
+    totalSamples: samples.length,
+    validSamples: finalPool.length,
+    horizontalDriftMeters: double.parse(maxDrift.toStringAsFixed(2)),
+  );
+}
+
