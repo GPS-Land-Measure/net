@@ -7,6 +7,9 @@ import 'utils/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load saved theme color across the whole application
+  await AppTheme.loadSavedTheme();
+
   // Ensure default offline surveyor profile exists so app ALWAYS opens offline
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -31,37 +34,42 @@ class GpsMeasureApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'GPS Land Measure',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Kantumruy Pro',
-        fontFamilyFallback: const [
-          'Kantumruy Pro',
-          'Khmer UI',
-          'Battambang',
-          'Khmer Sangam MN',
-          'Noto Sans Khmer',
-          'Khmer OS Siemreap',
-          'Khmer OS',
-          'sans-serif',
-        ],
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.sunsetPink,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.bgDark,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          foregroundColor: Colors.white,
-        ),
-        textTheme: const TextTheme(
-          bodyMedium: TextStyle(color: Colors.white),
-        ),
-      ),
-      home: isLoggedIn ? const HomeScreen() : const LoginScreen(),
+    return ValueListenableBuilder<Color>(
+      valueListenable: AppTheme.primaryColor,
+      builder: (context, primary, _) {
+        return MaterialApp(
+          title: 'GPS Land Measure',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            fontFamily: 'Kantumruy Pro',
+            fontFamilyFallback: const [
+              'Kantumruy Pro',
+              'Khmer UI',
+              'Battambang',
+              'Khmer Sangam MN',
+              'Noto Sans Khmer',
+              'Khmer OS Siemreap',
+              'Khmer OS',
+              'sans-serif',
+            ],
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: primary,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: AppColors.bgDark,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              foregroundColor: Colors.white,
+            ),
+            textTheme: const TextTheme(
+              bodyMedium: TextStyle(color: Colors.white),
+            ),
+          ),
+          home: isLoggedIn ? const HomeScreen() : const LoginScreen(),
+        );
+      },
     );
   }
 }

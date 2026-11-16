@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
 
 class MeasurementBottomSheet extends StatefulWidget {
   final double areaM2;
@@ -354,7 +355,7 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
             decoration: BoxDecoration(
               gradient: widget.canSave
-                  ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
+                  ? LinearGradient(colors: [AppTheme.currentPrimary, AppTheme.currentPrimaryDark])
                   : null,
               color: widget.canSave ? null : _neuInputBg,
               borderRadius: BorderRadius.circular(16),
@@ -365,7 +366,7 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
               boxShadow: widget.canSave
                   ? [
                       BoxShadow(
-                        color: _neuCobalt.withOpacity(0.4),
+                        color: AppTheme.currentPrimary.withOpacity(0.4),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -648,7 +649,7 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
                       ),
                       child: Text(
                         'ជ្រុង ${idx + 1}-${nextIdx + 1}: ${entry.value.toStringAsFixed(1)}m',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: _neuCobaltDark,
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,
@@ -685,7 +686,7 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
                           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                           decoration: BoxDecoration(
                             gradient: isSel
-                                ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
+                                ? LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
                                 : null,
                             color: isSel ? null : _neuBg,
                             borderRadius: BorderRadius.circular(10),

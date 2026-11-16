@@ -13,6 +13,7 @@ import 'camera_measure_screen.dart';
 import '../models/measurement.dart';
 import '../utils/geo_calculator.dart';
 import '../widgets/measurement_bottom_sheet.dart';
+import '../utils/app_theme.dart';
 
 enum MeasureMode { polygon, rectangle, circle, distance, walk }
 
@@ -260,6 +261,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   @override
   void initState() {
     super.initState();
+    AppTheme.primaryColor.addListener(_onThemeChanged);
     _mode = widget.initialMode;
     _loadPreferences();
     MapMeasurementScreen.targetLocationRequest.addListener(_handleTargetLocationRequest);
@@ -355,6 +357,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
 
   @override
   void dispose() {
+    AppTheme.primaryColor.removeListener(_onThemeChanged);
     MapMeasurementScreen.targetLocationRequest.removeListener(_handleTargetLocationRequest);
     MapMeasurementScreen.targetMapStyleRequest.removeListener(_handleTargetMapStyleRequest);
     MapMeasurementScreen.targetModeRequest.removeListener(_handleTargetModeRequest);
@@ -362,6 +365,14 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
     _livePositionStream?.cancel();
     _currentCenterNotifier.dispose();
     super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) {
+      setState(() {
+        _boundaryColor = AppTheme.currentPrimary;
+      });
+    }
   }
 
   void _switchMode(MeasureMode newMode) {
@@ -622,7 +633,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                        gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
@@ -2388,7 +2399,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                                             const SizedBox(height: 3),
                                             Text(
                                               '${lat.toStringAsFixed(5)}°, ${lng.toStringAsFixed(5)}°',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 color: _neuCobalt,
                                                 fontSize: 10,
                                                 fontWeight: FontWeight.bold,
@@ -2655,7 +2666,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                           child: Container(
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                              gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                               border: Border.all(color: Colors.white, width: 2),
                               boxShadow: [
                                 BoxShadow(color: _neuCobalt.withOpacity(0.55), blurRadius: 10),
@@ -5134,7 +5145,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('ស្មើនឹងទំហំ (អា):', style: TextStyle(color: _neuTextMuted, fontSize: 11)),
-                          Text('${subAre.toStringAsFixed(2)} អា / ឡូតិ៍', style: const TextStyle(color: _neuCobalt, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text('${subAre.toStringAsFixed(2)} អា / ឡូតិ៍', style: TextStyle(color: _neuCobalt, fontSize: 11, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ],
@@ -5152,7 +5163,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                      gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                       borderRadius: BorderRadius.circular(18),
                       boxShadow: [
                         BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
@@ -5497,7 +5508,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   const Text('ព្រះរាជាណាចក្រកម្ពុជា', style: TextStyle(color: _neuTextDark, fontSize: 14, fontWeight: FontWeight.w900)),
                   const Text('ជាតិ សាសនា ព្រះមហាក្សត្រ', style: TextStyle(color: _neuTextDark, fontSize: 12, fontWeight: FontWeight.bold)),
                   Container(margin: const EdgeInsets.symmetric(vertical: 4), width: 80, height: 1.5, color: _neuYellow),
-                  const Text('វិញ្ញាបនបត្រវាស់វែងព្រំប្រទល់ក្បាលដី', style: TextStyle(color: _neuCobaltDark, fontSize: 15, fontWeight: FontWeight.w900)),
+                  Text('វិញ្ញាបនបត្រវាស់វែងព្រំប្រទល់ក្បាលដី', style: TextStyle(color: _neuCobaltDark, fontSize: 15, fontWeight: FontWeight.w900)),
                   Text('កាលបរិច្ឆេទវាស់: $dateStr • កូអរដោនេ: WGS84 & UTM Zone 48N', style: const TextStyle(color: _neuTextMuted, fontSize: 10, fontWeight: FontWeight.bold)),
                 ],
               ),
@@ -5549,7 +5560,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Text('បង្គោល P${i + 1}', style: const TextStyle(color: _neuCobalt, fontWeight: FontWeight.w900, fontSize: 12)),
+                                  Text('បង្គោល P${i + 1}', style: TextStyle(color: _neuCobalt, fontWeight: FontWeight.w900, fontSize: 12)),
                                   const Spacer(),
                                   Text('ជ្រុង P${i+1}➔P${(i+1)%n+1}: ${dist.toStringAsFixed(1)}m (${brng.toStringAsFixed(0)}°)', style: const TextStyle(color: Color(0xFF047857), fontWeight: FontWeight.bold, fontSize: 11)),
                                 ],
@@ -5586,7 +5597,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]), borderRadius: BorderRadius.circular(16)),
+                      decoration: BoxDecoration(gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]), borderRadius: BorderRadius.circular(16)),
                       child: const Center(child: Text('ចម្លងវិញ្ញាបនបត្រប្លង់', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12.5))),
                     ),
                   ),

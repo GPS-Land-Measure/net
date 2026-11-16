@@ -13,6 +13,7 @@ import 'history_screen.dart';
 import 'settings_screen.dart';
 import 'login_screen.dart';
 import 'camera_measure_screen.dart';
+import '../utils/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -168,6 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    AppTheme.primaryColor.addListener(_onThemeChanged);
     _loadUserProfile();
     _loadLatestMeasurement();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -183,12 +185,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    AppTheme.primaryColor.removeListener(_onThemeChanged);
     for (final c in _plotSideControllers) {
       c.dispose();
     }
     _convertInputController.dispose();
     _convertPriceController.dispose();
     super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
   }
 
   String _toKhmerDigits(String input) {
@@ -516,9 +523,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   boxShadow: neuExtrudedShadows(distance: 3, blur: 8),
                   border: Border.all(color: Colors.white, width: 1),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.grid_view_rounded,
-                  color: _neuCobalt,
+                  color: AppTheme.currentPrimary,
                   size: 20,
                 ),
               ),
@@ -539,9 +546,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.search_rounded,
-                        color: _neuCobalt,
+                        color: AppTheme.currentPrimary,
                         size: 19,
                       ),
                       const SizedBox(width: 8),
@@ -598,9 +605,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 36,
                       height: 36,
                       padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _neuCobalt,
+                        color: AppTheme.currentPrimary,
                       ),
                       child: Center(
                         child: Text(
@@ -624,7 +631,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             width: 14,
                             height: 2.2,
                             decoration: BoxDecoration(
-                              color: _neuCobalt,
+                              color: AppTheme.currentPrimary,
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -811,8 +818,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       Text(
                         '🎯 ${_realPointsCount > 0 ? '$_realPointsCount ចំណុច' : 'រួចរាល់'}',
-                        style: const TextStyle(
-                          color: _neuCobalt,
+                        style: TextStyle(
+                          color: AppTheme.currentPrimary,
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                         ),
@@ -856,10 +863,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: _neuCobalt.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Live Tiles',
                               style: TextStyle(
-                                color: _neuCobalt,
+                                color: AppTheme.currentPrimary,
                                 fontSize: 9.5,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1546,8 +1553,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             child: Text(
                               chip,
-                              style: const TextStyle(
-                                color: _neuCobalt,
+                              style: TextStyle(
+                                color: AppTheme.currentPrimary,
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -1763,8 +1770,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(width: 5),
                             Text(
                               _userProvider == 'Google' ? 'GOOGLE / GMAIL ACCOUNT' : 'LAND SURVEYOR ACCOUNT',
-                              style: const TextStyle(
-                                color: _neuCobalt,
+                              style: TextStyle(
+                                color: AppTheme.currentPrimary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.3,
@@ -2058,10 +2065,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
                         border: Border.all(color: Colors.white, width: 1.2),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Icon(
                           Icons.sync_rounded,
-                          color: _neuCobalt,
+                          color: AppTheme.currentPrimary,
                           size: 20,
                         ),
                       ),
@@ -2154,8 +2161,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: Text(
                                 '= $areValue',
-                                style: const TextStyle(
-                                  color: _neuCobalt,
+                                style: TextStyle(
+                                  color: AppTheme.currentPrimary,
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -2171,8 +2178,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: Text(
                                 '• $haValue',
-                                style: const TextStyle(
-                                  color: _neuCobalt,
+                                style: TextStyle(
+                                  color: AppTheme.currentPrimary,
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -2211,9 +2218,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             border: Border.all(color: _neuCobalt.withOpacity(0.2), width: 1.2),
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.landscape_rounded,
-                          color: _neuCobalt,
+                          color: AppTheme.currentPrimary,
                           size: 30,
                         ),
                         Positioned(
@@ -2260,9 +2267,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.straighten_rounded,
-                      color: _neuCobalt,
+                      color: AppTheme.currentPrimary,
                       size: 15,
                     ),
                     const SizedBox(width: 7),
@@ -2281,9 +2288,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: _neuDarkShadow,
                     ),
                     const Spacer(),
-                    const Icon(
+                    Icon(
                       Icons.share_location_rounded,
-                      color: _neuCobalt,
+                      color: AppTheme.currentPrimary,
                       size: 14,
                     ),
                     const SizedBox(width: 5),
@@ -2319,13 +2326,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [_neuCobalt, _neuCobaltDark],
+                          gradient: LinearGradient(
+                            colors: [AppTheme.currentPrimary, AppTheme.currentPrimaryDark],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: _neuCobalt.withOpacity(0.4),
+                              color: AppTheme.currentPrimary.withOpacity(0.4),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -2430,13 +2437,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [_neuCobalt, _neuCobaltDark],
+                          gradient: LinearGradient(
+                            colors: [AppTheme.currentPrimary, AppTheme.currentPrimaryDark],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: _neuCobalt.withOpacity(0.4),
+                              color: AppTheme.currentPrimary.withOpacity(0.4),
                               blurRadius: 10,
                               offset: const Offset(0, 3),
                             ),
@@ -2621,7 +2628,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   _buildCompactMetricTile(
                     icon: Icons.pin_drop_rounded,
-                    gradientColors: const [_neuCobaltDark, Color(0xFF2563EB)], // Royal Cobalt
+                    gradientColors: [_neuCobaltDark, const Color(0xFF2563EB)], // Royal Cobalt
                     value: pointsCount,
                     unit: 'កន្លែង',
                     title: 'បង្គោលដី',
@@ -3333,7 +3340,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: _neuCobalt,
+                                color: AppTheme.currentPrimary,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Text(
@@ -3453,7 +3460,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 boxShadow: neuExtrudedShadows(distance: 3, blur: 7),
                                 border: Border.all(color: Colors.white, width: 1.2),
                               ),
-                              child: const Row(
+                              child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(Icons.refresh_rounded, color: _neuCobalt, size: 18),
@@ -3461,7 +3468,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     'ទាញយកទិន្នន័យថ្មី',
                                     style: TextStyle(
-                                      color: _neuCobalt,
+                                      color: AppTheme.currentPrimary,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w800,
                                     ),
@@ -3481,7 +3488,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                color: _neuCobalt,
+                                color: AppTheme.currentPrimary,
                                 borderRadius: BorderRadius.circular(16),
                                 boxShadow: [
                                   BoxShadow(
@@ -3640,8 +3647,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                       _weatherLocationName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: _neuCobalt,
+                                      style: TextStyle(
+                                        color: AppTheme.currentPrimary,
                                         fontSize: 10.5,
                                         fontWeight: FontWeight.w800,
                                       ),
@@ -3753,8 +3760,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               '$_weatherConditionIcon $_weatherConditionText',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: _neuCobalt,
+                              style: TextStyle(
+                                color: AppTheme.currentPrimary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -3929,7 +3936,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: Border.all(color: Colors.white, width: 1.0),
                   boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.public_rounded, color: _neuCobalt, size: 16),
@@ -3937,7 +3944,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       'មើលលម្អិតលក្ខខណ្ឌវាស់ដីពិភពលោក & ដ្រូន (Global Telemetry) >',
                       style: TextStyle(
-                        color: _neuCobalt,
+                        color: AppTheme.currentPrimary,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                       ),
@@ -3959,7 +3966,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: Border.all(color: Colors.white, width: 1.0),
                   boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.explore_rounded, color: _neuYellow, size: 16),
@@ -3967,7 +3974,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       'បើកត្រីវិស័យពិនិត្យទិសដី និងខ្យល់ (Digital Compass) >',
                       style: TextStyle(
-                        color: _neuCobalt,
+                        color: AppTheme.currentPrimary,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -4071,7 +4078,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
                         children: [
@@ -4088,7 +4095,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             '☀️ មេឃស្រឡះ',
                             style: TextStyle(
-                              color: _neuCobalt,
+                              color: AppTheme.currentPrimary,
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                             ),
@@ -4218,7 +4225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: Border.all(color: Colors.white, width: 1.0),
                   boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.explore_rounded, color: _neuYellow, size: 16),
@@ -4226,7 +4233,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       'បើកត្រីវិស័យពិនិត្យទិសដី និងខ្យល់ (Digital Compass) >',
                       style: TextStyle(
-                        color: _neuCobalt,
+                        color: AppTheme.currentPrimary,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -4285,10 +4292,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () {
                     setState(() => _currentNavIndex = 4);
                   },
-                  child: const Text(
+                  child: Text(
                     'មើលទាំងអស់ >',
                     style: TextStyle(
-                      color: _neuCobalt,
+                      color: AppTheme.currentPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
@@ -4319,7 +4326,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       border: Border.all(color: Colors.white, width: 1.2),
                       boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
                     ),
-                    child: const Icon(Icons.location_on_rounded, color: _neuCobalt, size: 22),
+                    child: Icon(Icons.location_on_rounded, color: _neuCobalt, size: 22),
                   ),
                   const SizedBox(height: 10),
                   const Text(
@@ -4353,7 +4360,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
+                            gradient: LinearGradient(
                               colors: [_neuCobalt, _neuCobaltDark],
                             ),
                             borderRadius: BorderRadius.circular(14),
@@ -4428,7 +4435,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       child: Icon(
                         item.type == MeasurementType.circle ? Icons.circle_outlined : Icons.polyline_rounded,
-                        color: _neuCobalt,
+                        color: AppTheme.currentPrimary,
                         size: 20,
                       ),
                     ),
@@ -4448,8 +4455,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 3),
                           Text(
                             '$m2 m²  •  $ha ហិកតា  •  ជុំវិញ: ${item.perimeterM.toStringAsFixed(0)}m',
-                            style: const TextStyle(
-                              color: _neuCobalt,
+                            style: TextStyle(
+                              color: AppTheme.currentPrimary,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
@@ -4474,7 +4481,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           border: Border.all(color: Colors.white, width: 1),
                           boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.open_in_new_rounded, color: _neuCobalt, size: 14),
@@ -4482,7 +4489,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               'វាស់',
                               style: TextStyle(
-                                color: _neuCobalt,
+                                color: AppTheme.currentPrimary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -5898,10 +5905,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: _neuCobalt.withOpacity(0.08),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
+                          child: Text(
                             'WGS84',
                             style: TextStyle(
-                              color: _neuCobalt,
+                              color: AppTheme.currentPrimary,
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
                             ),
@@ -5912,8 +5919,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 2),
                     Text(
                       coordsText,
-                      style: const TextStyle(
-                        color: _neuCobalt,
+                      style: TextStyle(
+                        color: AppTheme.currentPrimary,
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
                         fontFamily: 'monospace',
@@ -5956,9 +5963,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         border: Border.all(color: _neuCobalt.withOpacity(0.3), width: 1),
                         boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.map_rounded,
-                        color: _neuCobalt,
+                        color: AppTheme.currentPrimary,
                         size: 15,
                       ),
                     ),
@@ -5981,7 +5988,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Icon(
                     isLast ? Icons.replay_rounded : Icons.trending_flat_rounded,
-                    color: _neuCobalt,
+                    color: AppTheme.currentPrimary,
                     size: 13,
                   ),
                   const SizedBox(width: 5),
@@ -6148,10 +6155,10 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: isSelected
-              ? const LinearGradient(
+              ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [_neuCobalt, _neuCobaltDark],
+                  colors: [AppTheme.currentPrimary, AppTheme.currentPrimaryDark],
                 )
               : null,
           color: isSelected ? null : _neuBg,
@@ -6162,7 +6169,7 @@ class _HomeScreenState extends State<HomeScreen> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: _neuCobalt.withOpacity(0.55),
+                    color: AppTheme.currentPrimary.withOpacity(0.55),
                     blurRadius: 16,
                     offset: const Offset(0, 5),
                   ),
@@ -6179,7 +6186,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : _neuCobalt,
+              color: isSelected ? Colors.white : AppTheme.currentPrimary,
               size: isSelected ? 28 : 26,
               shadows: isSelected
                   ? const [
@@ -6444,8 +6451,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         child: Text(
                           '${_calcHistory.length}',
-                          style: const TextStyle(
-                            color: _neuCobalt,
+                          style: TextStyle(
+                            color: AppTheme.currentPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
                           ),
@@ -6552,8 +6559,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                         const SizedBox(height: 4),
                                         Text(
                                           '= $res',
-                                          style: const TextStyle(
-                                            color: _neuCobalt,
+                                          style: TextStyle(
+                                            color: AppTheme.currentPrimary,
                                             fontSize: 17,
                                             fontWeight: FontWeight.w900,
                                           ),
@@ -6670,8 +6677,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: Text(
                       'ខ្នាតដីកម្ពុជា',
-                      style: const TextStyle(
-                        color: _neuCobalt,
+                      style: TextStyle(
+                        color: AppTheme.currentPrimary,
                         fontWeight: FontWeight.w900,
                         fontSize: 12.5,
                       ),
@@ -6818,8 +6825,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       _calcIsUsd
                           ? '\$${total.toStringAsFixed(0)} USD'
                           : '៛${total.toStringAsFixed(0)} ៛',
-                      style: const TextStyle(
-                        color: _neuCobalt,
+                      style: TextStyle(
+                        color: AppTheme.currentPrimary,
                         fontSize: 27,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.5,
@@ -6961,8 +6968,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 6),
                       Text(
                         'យកទំហំពីវាស់ដី (${_realAreaM2.toStringAsFixed(1)} m²)',
-                        style: const TextStyle(
-                          color: _neuCobalt,
+                        style: TextStyle(
+                          color: AppTheme.currentPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
                         ),
@@ -7081,8 +7088,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     _calcIsUsd
                         ? '\$${_calcPricePerUnit.toStringAsFixed(0)}'
                         : '៛${(_calcPricePerUnit * 4100).toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      color: _neuCobalt,
+                    style: TextStyle(
+                      color: AppTheme.currentPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
@@ -7429,8 +7436,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     Container(
                       width: 34,
                       height: 34,
-                      decoration: const BoxDecoration(
-                        color: _neuCobalt,
+                      decoration: BoxDecoration(
+                        color: AppTheme.currentPrimary,
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -7501,8 +7508,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           controller: editCtrl,
                           autofocus: true,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: const TextStyle(
-                            color: _neuCobalt,
+                          style: TextStyle(
+                            color: AppTheme.currentPrimary,
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                           ),
@@ -7562,7 +7569,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                      gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
@@ -7714,7 +7721,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                            gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(
@@ -7852,8 +7859,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   '${_formatNumber(plotArea, decimals: 1)} m²',
-                                  style: const TextStyle(
-                                    color: _neuCobalt,
+                                  style: TextStyle(
+                                    color: AppTheme.currentPrimary,
                                     fontSize: 17,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: -0.3,
@@ -8330,8 +8337,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 controller: controller,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: _neuCobalt,
+                style: TextStyle(
+                  color: AppTheme.currentPrimary,
                   fontSize: 13.5,
                   fontWeight: FontWeight.w900,
                 ),
@@ -8532,8 +8539,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 6),
               Text(
                 '\$${monthlyPayment.toStringAsFixed(0)} / ខែ',
-                style: const TextStyle(
-                  color: _neuCobalt,
+                style: TextStyle(
+                  color: AppTheme.currentPrimary,
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
@@ -8924,8 +8931,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             const SizedBox(width: 3),
                             Text(
                               'យកដីវាស់បាន (${_formatNumber(_realAreaM2, decimals: 0)}m²)',
-                              style: const TextStyle(
-                                color: _neuCobalt,
+                              style: TextStyle(
+                                color: AppTheme.currentPrimary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -8955,8 +8962,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: TextField(
                           controller: _convertInputController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: const TextStyle(
-                            color: _neuCobalt,
+                          style: TextStyle(
+                            color: AppTheme.currentPrimary,
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                           ),
@@ -8979,7 +8986,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       height: 48,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                        gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -9634,8 +9641,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 5),
                     Text(
                       'ប្រវត្តិ (${_calcHistory.length})',
-                      style: const TextStyle(
-                        color: _neuCobalt,
+                      style: TextStyle(
+                        color: AppTheme.currentPrimary,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -9772,8 +9779,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 alignment: Alignment.centerRight,
                 child: Text(
                   _calcDisplay,
-                  style: const TextStyle(
-                    color: _neuCobalt,
+                  style: TextStyle(
+                    color: AppTheme.currentPrimary,
                     fontSize: 38,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.5,
@@ -9846,7 +9853,7 @@ class _HomeScreenState extends State<HomeScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: [_neuCobalt, _neuCobaltDark],
               ),
               borderRadius: BorderRadius.circular(16),
@@ -9930,7 +9937,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 height: 52,
                 decoration: BoxDecoration(
                   gradient: isEqual
-                      ? const LinearGradient(
+                      ? LinearGradient(
                           colors: [_neuCobalt, _neuCobaltDark],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/measurement.dart';
 import 'login_screen.dart';
+import '../utils/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -67,12 +68,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _avatarColorIndex = 0;
   String _userAvatarEmoji = '📐';
 
-  static const List<List<Color>> _avatarColors = [
+  List<List<Color>> get _avatarColors => [
     [_neuCobalt, _neuCobaltDark],
-    [Color(0xFF059669), Color(0xFF047857)],
-    [Color(0xFFD97706), Color(0xFFB45309)],
-    [Color(0xFF7C3AED), Color(0xFF6D28D9)],
-    [Color(0xFFE11D48), Color(0xFFBE123C)],
+    const [Color(0xFF059669), Color(0xFF047857)],
+    const [Color(0xFFD97706), Color(0xFFB45309)],
+    const [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+    const [Color(0xFFE11D48), Color(0xFFBE123C)],
   ];
 
   // Measurement Settings
@@ -102,8 +103,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    AppTheme.primaryColor.addListener(_onThemeChanged);
     _loadSettings();
     _loadSurveyStats();
+  }
+
+  @override
+  void dispose() {
+    AppTheme.primaryColor.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadSettings() async {
@@ -435,7 +447,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             decoration: BoxDecoration(
                               gradient: isSel
-                                  ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
+                                  ? LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
                                   : null,
                               color: isSel ? null : _neuBg,
                               borderRadius: BorderRadius.circular(16),
@@ -550,7 +562,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 13),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                              gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
@@ -1451,6 +1463,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _boundaryColorName = tempSelectedColor;
                       });
                       _saveSetting('pref_color', tempSelectedColor);
+                      AppTheme.setTheme(tempSelectedColor);
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -1463,7 +1476,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'បានប្ដូរពណ៌ប្លង់ដីទៅជា "$tempSelectedColor" ដោយជោគជ័យ!',
+                                  'បានប្ដូរពណ៌កម្មវិធី & ប្លង់ដីទាំងមូលទៅជា "$tempSelectedColor" ដោយជោគជ័យ!',
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -1543,7 +1556,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   border: Border.all(color: Colors.white, width: 1.5),
                   boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
                 ),
-                child: const Icon(Icons.cleaning_services_rounded, color: _neuCobalt, size: 24),
+                child: Icon(Icons.cleaning_services_rounded, color: _neuCobalt, size: 24),
               ),
               const SizedBox(height: 12),
               const Text(
@@ -1586,7 +1599,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                          gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
@@ -1798,11 +1811,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         border: Border.all(color: Colors.white, width: 1.2),
                         boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.verified_rounded, color: _neuCobalt, size: 13),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text(
                             'v2.5 Pro',
                             style: TextStyle(
@@ -2067,7 +2080,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                              gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 6, offset: const Offset(0, 2)),
@@ -2211,7 +2224,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: Image.asset(
                             'assets/icon/app_logo.png',
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
+                            errorBuilder: (_, __, ___) => Icon(
                               Icons.terrain_rounded,
                               color: _neuCobalt,
                               size: 32,
@@ -2474,7 +2487,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   border: Border.all(color: Colors.white, width: 1.2),
                   boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.edit_rounded,
                   color: _neuCobalt,
                   size: 18,
@@ -2600,10 +2613,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 3. HELPER COMPONENTS
   // ─────────────────────────────────────────────────────────────
   Widget _buildSectionHeader(String title) {
+    final activeTheme = _getColorFromName(_boundaryColorName);
     return Text(
       title,
-      style: const TextStyle(
-        color: _neuCobalt,
+      style: TextStyle(
+        color: activeTheme,
         fontSize: 13,
         fontWeight: FontWeight.w900,
         letterSpacing: 0.2,
@@ -2639,6 +2653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required List<String> options,
     required ValueChanged<String?> onChanged,
   }) {
+    final activeTheme = _getColorFromName(_boundaryColorName);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -2652,7 +2667,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               border: Border.all(color: Colors.white, width: 1.2),
               boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
             ),
-            child: Icon(icon, color: _neuCobalt, size: 19),
+            child: Icon(icon, color: activeTheme, size: 19),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2690,9 +2705,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: value,
                 isDense: true,
                 dropdownColor: _neuBg,
-                icon: const Icon(Icons.arrow_drop_down_rounded, color: _neuCobalt, size: 20),
-                style: const TextStyle(
-                  color: _neuCobalt,
+                icon: Icon(Icons.arrow_drop_down_rounded, color: activeTheme, size: 20),
+                style: TextStyle(
+                  color: activeTheme,
                   fontSize: 12,
                   fontWeight: FontWeight.w900,
                 ),
@@ -2715,6 +2730,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
+    final activeTheme = _getColorFromName(_boundaryColorName);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -2728,7 +2744,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               border: Border.all(color: Colors.white, width: 1.2),
               boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
             ),
-            child: Icon(icon, color: _neuCobalt, size: 19),
+            child: Icon(icon, color: activeTheme, size: 19),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2762,13 +2778,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               height: 27,
               padding: const EdgeInsets.symmetric(horizontal: 3),
               decoration: BoxDecoration(
-                color: value ? _neuCobalt : _neuInputBg,
+                color: value ? activeTheme : _neuInputBg,
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: Colors.white, width: 1),
                 boxShadow: value
                     ? [
                         BoxShadow(
-                          color: _neuCobalt.withOpacity(0.4),
+                          color: activeTheme.withOpacity(0.4),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),

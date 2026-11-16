@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/measurement.dart';
 import 'map_measurement_screen.dart';
+import '../utils/app_theme.dart';
 
 class HistoryScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -72,6 +73,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+    AppTheme.primaryColor.addListener(_onThemeChanged);
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.trim().toLowerCase();
@@ -82,8 +84,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   void dispose() {
+    AppTheme.primaryColor.removeListener(_onThemeChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -444,7 +451,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.copy_rounded, color: _neuCobalt, size: 18),
+                            icon: Icon(Icons.copy_rounded, color: _neuCobalt, size: 18),
                             onPressed: () {
                               Clipboard.setData(ClipboardData(text: '$lat, $lng'));
                             },
@@ -475,7 +482,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                    gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
@@ -879,7 +886,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6.5),
                       decoration: BoxDecoration(
                         gradient: isSelected
-                            ? const LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
+                            ? LinearGradient(colors: [_neuCobalt, _neuCobaltDark])
                             : null,
                         color: isSelected ? null : _neuBg,
                         borderRadius: BorderRadius.circular(16),
@@ -1112,14 +1119,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       children: [
                         Text(
                           item.areaM2.toStringAsFixed(1),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: _neuCobalt,
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Text(
+                        Text(
                           'm²',
                           style: TextStyle(color: _neuCobalt, fontSize: 12, fontWeight: FontWeight.w900),
                         ),
@@ -1189,10 +1196,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       border: Border.all(color: Colors.white, width: 1.2),
                       boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
                         Icon(Icons.format_list_numbered_rounded, color: _neuCobalt, size: 13),
-                        SizedBox(width: 4),
+                        const SizedBox(width: 4),
                         Text(
                           'កូអរដោនេ',
                           style: TextStyle(color: _neuCobalt, fontSize: 11, fontWeight: FontWeight.w900),
@@ -1215,7 +1222,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       border: Border.all(color: Colors.white, width: 1.2),
                       boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
                     ),
-                    child: const Icon(Icons.share_rounded, color: _neuCobalt, size: 15),
+                    child: Icon(Icons.share_rounded, color: _neuCobalt, size: 15),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1237,7 +1244,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                      gradient: LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
