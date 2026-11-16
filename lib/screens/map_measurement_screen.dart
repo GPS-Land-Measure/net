@@ -279,15 +279,21 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       _useKhmerDigits = (prefs.getString('pref_khmer_numerals') ?? 'true') == 'true';
       final colorName = prefs.getString('pref_color') ?? 'ខៀវរាជ (Cobalt Blue)';
       if (colorName.contains('បៃតង')) {
-        _boundaryColor = const Color(0xFF059669);
+        _boundaryColor = const Color(0xFF059669); // Emerald Green
       } else if (colorName.contains('ទឹកក្រូច') || colorName.contains('មាស')) {
-        _boundaryColor = const Color(0xFFD97706);
+        _boundaryColor = const Color(0xFFD97706); // Golden Amber
+      } else if (colorName.contains('ផ្កាឈូក')) {
+        _boundaryColor = const Color(0xFFEC4899); // Rose Pink
       } else if (colorName.contains('ក្រហម')) {
-        _boundaryColor = const Color(0xFFDC2626);
+        _boundaryColor = const Color(0xFFDC2626); // Ruby Red
       } else if (colorName.contains('ស្វាយ')) {
-        _boundaryColor = const Color(0xFF7C3AED);
+        _boundaryColor = const Color(0xFF7C3AED); // Royal Purple
+      } else if (colorName.contains('ផ្ទៃមេឃ') || colorName.contains('Cyan')) {
+        _boundaryColor = const Color(0xFF0284C7); // Cyan Sky
+      } else if (colorName.contains('លឿង')) {
+        _boundaryColor = const Color(0xFFEAB308); // Electric Yellow
       } else {
-        _boundaryColor = const Color(0xFF1338BE);
+        _boundaryColor = const Color(0xFF1338BE); // Cobalt Blue
       }
 
       final fontName = prefs.getString('pref_font') ?? 'ស្តង់ដារ (Medium)';

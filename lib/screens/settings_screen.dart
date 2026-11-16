@@ -848,6 +848,674 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  static const List<Map<String, dynamic>> _boundaryColorPalettes = [
+    {
+      'name': 'ខៀវរាជ (Cobalt Blue)',
+      'color': Color(0xFF1338BE),
+      'tag': 'ស្តង់ដារប្លង់សុរិយោដី',
+      'desc': 'ពណ៌ផ្លូវការ ច្បាស់ និងសុក្រឹតភាពខ្ពស់',
+      'icon': Icons.verified_rounded,
+    },
+    {
+      'name': 'បៃតងត្បូង (Emerald Green)',
+      'color': Color(0xFF059669),
+      'tag': 'ដីចំការ & កសិកម្ម',
+      'desc': 'ស្រាលស្រទន់ ស័ក្តិសមជាមួយដីស្រែចំការ',
+      'icon': Icons.eco_rounded,
+    },
+    {
+      'name': 'ទឹកក្រូចមាស (Golden Amber)',
+      'color': Color(0xFFD97706),
+      'tag': 'ដីពាណិជ្ជកម្ម & ឡូតិ៍',
+      'desc': 'ពណ៌លេចធ្លោ ងាយមើលឃើញលើផែនទីផ្កាយរណប',
+      'icon': Icons.wb_sunny_rounded,
+    },
+    {
+      'name': 'ក្រហមទទឹម (Ruby Red)',
+      'color': Color(0xFFDC2626),
+      'tag': 'ព្រំប្រទល់ច្បាស់បំផុត',
+      'desc': 'កម្រិតកុងត្រាសខ្ពស់បំផុត ឃើញច្បាស់គ្រប់កាលៈទេសៈ',
+      'icon': Icons.flag_rounded,
+    },
+    {
+      'name': 'ស្វាយអភិជន (Royal Purple)',
+      'color': Color(0xFF7C3AED),
+      'tag': 'ដីភូមិគ្រឹះ & លំនៅដ្ឋាន',
+      'desc': 'រចនាបថទាន់សម័យ និងមានរបៀបរៀបរយ',
+      'icon': Icons.villa_rounded,
+    },
+    {
+      'name': 'ផ្កាឈូកអ៊ីយូតា (Rose Pink)',
+      'color': Color(0xFFEC4899),
+      'tag': 'ពន្លឺអ៊ីយូតា (Neon)',
+      'desc': 'ងាយកត់សម្គាល់ពេលវាស់ដីពេលថ្ងៃលិច ឬព្រៃក្រាស់',
+      'icon': Icons.auto_awesome_rounded,
+    },
+    {
+      'name': 'ផ្ទៃមេឃ (Cyan Sky)',
+      'color': Color(0xFF0284C7),
+      'tag': 'ស្រឡះភ្នែក',
+      'desc': 'ពណ៌ភ្លឺថ្លា ប្លង់ដីមើលទៅទូលាយស្រឡះស្អាត',
+      'icon': Icons.water_drop_rounded,
+    },
+    {
+      'name': 'លឿងទុំភ្លឺ (Electric Yellow)',
+      'color': Color(0xFFEAB308),
+      'tag': 'ប្លង់ការដ្ឋានសំណង់',
+      'desc': 'ពណ៌ភ្លឺខ្លាំង ងាយកត់សម្គាល់ពេលថ្ងៃក្តៅខ្លាំង',
+      'icon': Icons.bolt_rounded,
+    },
+  ];
+
+  Color _getColorFromName(String name) {
+    if (name.contains('បៃតង')) return const Color(0xFF059669);
+    if (name.contains('ទឹកក្រូច') || name.contains('មាស')) return const Color(0xFFD97706);
+    if (name.contains('ផ្កាឈូក')) return const Color(0xFFEC4899);
+    if (name.contains('ក្រហម')) return const Color(0xFFDC2626);
+    if (name.contains('ស្វាយ')) return const Color(0xFF7C3AED);
+    if (name.contains('ផ្ទៃមេឃ') || name.contains('Cyan')) return const Color(0xFF0284C7);
+    if (name.contains('លឿង')) return const Color(0xFFEAB308);
+    return const Color(0xFF1338BE);
+  }
+
+  Widget _buildColorPickerTile() {
+    final currentColor = _getColorFromName(_boundaryColorName);
+    return InkWell(
+      onTap: () => _showColorPickerModal(context),
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _neuBg,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1.2),
+                boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+              ),
+              child: Center(
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: currentColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: currentColor.withOpacity(0.5),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'ពណ៌បន្ទាត់ព្រំដីលើផែនទី',
+                    style: TextStyle(
+                      color: _neuTextDark,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(
+                        _boundaryColorName,
+                        style: TextStyle(
+                          color: currentColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: currentColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'បច្ចុប្បន្ន',
+                          style: TextStyle(
+                            color: currentColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Button to open modal
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: _neuInputBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white, width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: _neuDarkShadow.withOpacity(0.25),
+                    blurRadius: 4,
+                    offset: const Offset(1, 1),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: currentColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'ប្ដូរពណ៌',
+                    style: TextStyle(
+                      color: _neuCobalt,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  const Icon(Icons.palette_rounded, color: _neuCobalt, size: 14),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showColorPickerModal(BuildContext context) {
+    String tempSelectedColor = _boundaryColorName;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final activeColor = _getColorFromName(tempSelectedColor);
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+              ),
+              decoration: const BoxDecoration(
+                color: _neuBg,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 20,
+                    offset: Offset(0, -6),
+                  ),
+                ],
+              ),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 14,
+                bottom: MediaQuery.of(modalCtx).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Pull Handle
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: _neuDarkShadow.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: activeColor.withOpacity(0.12),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: activeColor.withOpacity(0.3), width: 1.5),
+                            ),
+                            child: Icon(Icons.palette_rounded, color: activeColor, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ប្ដូរពណ៌ប្លង់ដី & កម្មវិធី',
+                                style: TextStyle(
+                                  color: _neuTextDark,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 17,
+                                ),
+                              ),
+                              Text(
+                                'Theme & Boundary Color Customizer',
+                                style: TextStyle(
+                                  color: _neuTextMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: _neuBg,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.2),
+                            boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
+                          ),
+                          child: const Icon(Icons.close_rounded, color: _neuTextMuted, size: 18),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Mini Live Cadastral Preview
+                  Container(
+                    height: 130,
+                    width: double.infinity,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(color: activeColor.withOpacity(0.4), width: 1.6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: activeColor.withOpacity(0.2),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _MiniCadastralPreviewPainter(color: activeColor),
+                          ),
+                        ),
+
+                        // Top Chips
+                        Positioned(
+                          top: 10,
+                          left: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white24, width: 0.8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.map_rounded, color: Colors.white70, size: 12),
+                                SizedBox(width: 4),
+                                Text(
+                                  'ប្លង់ដីគំរូជាក់ស្ដែង (Preview)',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        Positioned(
+                          top: 10,
+                          right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: activeColor.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: activeColor, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: activeColor,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(color: activeColor, blurRadius: 4),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  tempSelectedColor.split(' ')[0],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Bottom Metrics
+                        Positioned(
+                          bottom: 10,
+                          left: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'ផ្ទៃដី៖ ១.២៥ ហិកតា (12,500 m²)',
+                              style: TextStyle(
+                                color: Color(0xFF10B981),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        Positioned(
+                          bottom: 10,
+                          right: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              '៥ បង្គោលព្រំ',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  const Text(
+                    'ជ្រើសរើសពណ៌ដែលអ្នកពេញចិត្ត៖',
+                    style: TextStyle(
+                      color: _neuTextDark,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Palette Options List (Scrollable)
+                  Flexible(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        children: _boundaryColorPalettes.map((p) {
+                          final pName = p['name'] as String;
+                          final pColor = p['color'] as Color;
+                          final pTag = p['tag'] as String;
+                          final pDesc = p['desc'] as String;
+                          final pIcon = p['icon'] as IconData;
+                          final isSelected = tempSelectedColor == pName;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: GestureDetector(
+                              onTap: () {
+                                setModalState(() {
+                                  tempSelectedColor = pName;
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? Colors.white : _neuBg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isSelected ? pColor : Colors.white,
+                                    width: isSelected ? 2.0 : 1.2,
+                                  ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: pColor.withOpacity(0.25),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ]
+                                      : neuExtrudedShadows(distance: 2, blur: 5),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Color swatch badge
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: pColor,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: pColor.withOpacity(0.4),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(pIcon, color: Colors.white, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Details
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  pName,
+                                                  style: TextStyle(
+                                                    color: isSelected ? pColor : _neuTextDark,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: pColor.withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  pTag,
+                                                  style: TextStyle(
+                                                    color: pColor,
+                                                    fontSize: 8.5,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            pDesc,
+                                            style: const TextStyle(
+                                              color: _neuTextMuted,
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Radio check
+                                    Container(
+                                      width: 24,
+                                      height: 24,
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? pColor : Colors.transparent,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: isSelected ? pColor : _neuDarkShadow.withOpacity(0.6),
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: isSelected
+                                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
+                                          : null,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Apply Button
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _boundaryColorName = tempSelectedColor;
+                      });
+                      _saveSetting('pref_color', tempSelectedColor);
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: activeColor,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          content: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'បានប្ដូរពណ៌ប្លង់ដីទៅជា "$tempSelectedColor" ដោយជោគជ័យ!',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [activeColor, activeColor.withOpacity(0.85)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: activeColor.withOpacity(0.4),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'យល់ព្រមប្រើប្រាស់ពណ៌នេះ (Apply Color)',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showClearCacheDialog() {
     showDialog(
       context: context,
@@ -1292,22 +1960,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                   _buildDivider(),
-                  _buildDropdownTile(
-                    icon: Icons.palette_rounded,
-                    title: 'ពណ៌បន្ទាត់ព្រំដីលើផែនទី',
-                    subtitle: 'Boundary line color theme',
-                    value: _boundaryColorName,
-                    options: const [
-                      'ខៀវរាជ (Cobalt Blue)',
-                      'បៃតងត្បូង (Emerald Green)',
-                      'ទឹកក្រូចមាស (Golden Amber)',
-                      'ក្រហមផ្កាឈូក (Rose Red)',
-                    ],
-                    onChanged: (val) {
-                      setState(() => _boundaryColorName = val!);
-                      _saveSetting('pref_color', val);
-                    },
-                  ),
+                  _buildColorPickerTile(),
                   _buildDivider(),
                   _buildDropdownTile(
                     icon: Icons.format_size_rounded,
@@ -2251,3 +2904,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+
+class _MiniCadastralPreviewPainter extends CustomPainter {
+  final Color color;
+
+  _MiniCadastralPreviewPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Grid pattern for blueprint effect
+    final gridPaint = Paint()
+      ..color = Colors.white.withOpacity(0.06)
+      ..strokeWidth = 1.0;
+    const step = 20.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    // 2. 5 Cadastral Points normalized to preview box
+    final pts = [
+      Offset(size.width * 0.16, size.height * 0.32),
+      Offset(size.width * 0.52, size.height * 0.22),
+      Offset(size.width * 0.84, size.height * 0.38),
+      Offset(size.width * 0.76, size.height * 0.82),
+      Offset(size.width * 0.26, size.height * 0.80),
+    ];
+
+    final path = Path()..moveTo(pts[0].dx, pts[0].dy);
+    for (int i = 1; i < pts.length; i++) {
+      path.lineTo(pts[i].dx, pts[i].dy);
+    }
+    path.close();
+
+    // 3. Fill Polygon
+    final fillPaint = Paint()
+      ..color = color.withOpacity(0.24)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fillPaint);
+
+    // 4. Glow outer stroke
+    final glowPaint = Paint()
+      ..color = color.withOpacity(0.4)
+      ..strokeWidth = 5.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    canvas.drawPath(path, glowPaint);
+
+    // 5. Crisp Boundary Line
+    final strokePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.6
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, strokePaint);
+
+    // 6. Pins at vertices
+    for (int i = 0; i < pts.length; i++) {
+      final p = pts[i];
+      // Outer drop shadow
+      canvas.drawCircle(p, 8.5, Paint()..color = Colors.black45);
+      // Colored ring
+      canvas.drawCircle(p, 7.5, Paint()..color = color);
+      // White inner core
+      canvas.drawCircle(p, 4.2, Paint()..color = Colors.white);
+      // Center dot
+      canvas.drawCircle(p, 1.8, Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniCadastralPreviewPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
