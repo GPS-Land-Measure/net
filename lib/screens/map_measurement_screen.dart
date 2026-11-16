@@ -3995,7 +3995,10 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Container(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.88,
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
           decoration: BoxDecoration(
             color: _neuBg,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
@@ -4054,15 +4057,32 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                       ],
                     ),
                   ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _neuBg,
+                        shape: BoxShape.circle,
+                        boxShadow: neuExtrudedShadows(distance: 2, blur: 4),
+                      ),
+                      child: const Icon(Icons.close_rounded, size: 18, color: _neuTextMuted),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              // Tool Toggles
-              _buildToolSwitchTile(
-                icon: Icons.auto_awesome_rounded,
-                title: 'វាស់មធ្យមភាគ GPS សុក្រឹតខ្ពស់ (Averaging)',
-                subtitle: 'ចាប់យក ១៥ គំរូ ជម្រុះ Drift ដើម្បីភាពសុក្រឹតកម្រិតខ្ពស់',
+              const SizedBox(height: 14),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tool Toggles
+                      _buildToolSwitchTile(
+                        icon: Icons.auto_awesome_rounded,
+                        title: 'វាស់មធ្យមភាគ GPS សុក្រឹតខ្ពស់ (Averaging)',
+                        subtitle: 'ចាប់យក ១៥ គំរូ ជម្រុះ Drift ដើម្បីភាពសុក្រឹតកម្រិតខ្ពស់',
                 value: _enableHighPrecisionGps,
                 onChanged: (val) {
                   setModalState(() => _enableHighPrecisionGps = val);
@@ -4383,11 +4403,16 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 14),
             ],
           ),
         ),
       ),
-    );
+    ],
+  ),
+),
+),
+);
   }
 
   Widget _buildToolSwitchTile({
