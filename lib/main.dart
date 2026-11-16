@@ -7,17 +7,21 @@ import 'utils/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  bool isLoggedIn = false;
+  // Ensure default offline surveyor profile exists so app ALWAYS opens offline
   try {
     final prefs = await SharedPreferences.getInstance();
     final savedLogin = prefs.getBool('is_logged_in') ?? false;
     final userEmail = prefs.getString('user_email');
-    if (savedLogin && userEmail != null && userEmail.isNotEmpty) {
-      isLoggedIn = true;
+    if (!savedLogin || userEmail == null || userEmail.isEmpty) {
+      await prefs.setBool('is_logged_in', true);
+      await prefs.setString('user_name', 'អ្នកវាស់ដី (Offline Surveyor)');
+      await prefs.setString('user_email', 'surveyor@offline.local');
+      await prefs.setString('user_role', 'អ្នកវាស់ដី (Surveyor Pro)');
+      await prefs.setString('user_provider', 'Offline Mode');
     }
   } catch (_) {}
 
-  runApp(GpsMeasureApp(isLoggedIn: isLoggedIn));
+  runApp(const GpsMeasureApp(isLoggedIn: true));
 }
 
 class GpsMeasureApp extends StatelessWidget {

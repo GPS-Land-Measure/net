@@ -770,7 +770,11 @@ class _LoginScreenState extends State<LoginScreen>
 
                         // ── Neumorphic Google Sign In Button ───
                         _buildGoogleSignInButton(),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 12),
+
+                        // ── Direct Offline Mode (No Internet Needed) ───
+                        _buildDirectOfflineButton(),
+                        const SizedBox(height: 20),
 
                         // ── App Footer ─────────────────────────
                         const Text(
@@ -1744,6 +1748,54 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 6. DIRECT OFFLINE ENTRY (100% Zero Internet / Guest Surveyor)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildDirectOfflineButton() {
+    return GestureDetector(
+      onTap: () async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('is_logged_in', true);
+          if (prefs.getString('user_name') == null || prefs.getString('user_name')!.isEmpty) {
+            await prefs.setString('user_name', 'អ្នកវាស់ដី (Offline Surveyor)');
+            await prefs.setString('user_email', 'surveyor@offline.local');
+            await prefs.setString('user_role', 'អ្នកវាស់ដី (Surveyor Pro)');
+            await prefs.setString('user_provider', 'Offline Mode');
+          }
+        } catch (_) {}
+        if (!mounted) return;
+        _navigateToHome();
+      },
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          color: _neuBg,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFF10B981).withOpacity(0.55), width: 1.5),
+          boxShadow: neuExtrudedShadows(distance: 4, blur: 10),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.offline_bolt_rounded, color: Color(0xFF10B981), size: 21),
+            SizedBox(width: 8),
+            Text(
+              'ចូលវាស់ដីភ្លាមៗ (របៀប Offline គ្មាន Internet)',
+              style: TextStyle(
+                color: Color(0xFF047857),
+                fontSize: 14.5,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
         ),
       ),
     );

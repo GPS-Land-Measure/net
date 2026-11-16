@@ -467,18 +467,22 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
     _livePositionStream?.cancel();
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 1, // live update every 1 meter
+      distanceFilter: 0, // Continuous live updates even while standing still
     );
     _livePositionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (pos) {
         if (!mounted) return;
         final loc = LatLng(pos.latitude, pos.longitude);
+        final wasNull = _userLocation == null;
         setState(() {
           _userLocation = loc;
           _gpsAccuracy = pos.accuracy;
           _gpsAltitude = pos.altitude;
           _isGpsLocked = true;
         });
+        if (wasNull && _polygonPoints.isEmpty) {
+          _safeMoveMap(loc);
+        }
       },
       onError: (_) {},
     );
@@ -843,23 +847,21 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   }
 
   void _finalizePointFromSamples(List<GpsFixSample> samples) {
-    if (samples.isEmpty && _userLocation != null) {
-      samples.add(GpsFixSample(
-        position: _userLocation!,
-        accuracy: _gpsAccuracy,
-        altitude: _gpsAltitude,
-        timestamp: DateTime.now(),
-      ));
+    LatLng target;
+    String statusMsg;
+    if (samples.isNotEmpty) {
+      final result = computePrecisionGpsAverage(samples);
+      target = result.averagedPosition;
+      _gpsAccuracy = result.estimatedPrecisionMeters;
+      _gpsAltitude = result.avgAltitude;
+      statusMsg = '🎯 បង្គោលទី ${_polygonPoints.length + 1} បានកត់ត្រាសុក្រឹត ±${result.estimatedPrecisionMeters}m (មធ្យមភាគ ${result.validSamples}/${result.totalSamples} គំរូ)';
+    } else {
+      target = _userLocation ?? _currentCenter;
+      statusMsg = '🎯 បង្គោលទី ${_polygonPoints.length + 1} បានកត់ត្រា (ទីតាំងជាក់ស្តែង)';
     }
-    if (samples.isEmpty) return;
-
-    final result = computePrecisionGpsAverage(samples);
-    final target = result.averagedPosition;
 
     setState(() {
       _userLocation = target;
-      _gpsAccuracy = result.estimatedPrecisionMeters;
-      _gpsAltitude = result.avgAltitude;
       _selectedPointIndex = null;
       if (_mode == MeasureMode.circle) {
         _circleCenter = target;
@@ -877,7 +879,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '🎯 បង្គោលទី ${_polygonPoints.length} បានកត់ត្រាសុក្រឹត ±${result.estimatedPrecisionMeters}m (មធ្យមភាគ ${result.validSamples}/${result.totalSamples} គំរូ)',
+          statusMsg,
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: const Color(0xFF10B981),
@@ -2429,6 +2431,13 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
         bottom: false,
         child: Stack(
           children: [
+            // ── 0. OFFLINE CADASTRAL SURVEYOR BLUEPRINT (Always active behind map) ──
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _CadastralBlueprintPainter(),
+              ),
+            ),
+
             // ── 1. FULLSCREEN MAP VIEWPORT ──
             Positioned.fill(
               child: FlutterMap(
@@ -5636,4 +5645,57 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// CADASTRAL BLUEPRINT SURVEYOR GRID PAINTER (100% Offline Canvas)
+// ─────────────────────────────────────────────────────────────
+class _CadastralBlueprintPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Technical Cadastral Deep Background (Slate Navy)
+    final bgPaint = Paint()..color = const Color(0xFF1E2638);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+
+    // 2. Minor Grid Lines (24px step)
+    final minorPaint = Paint()
+      ..color = const Color(0xFF334155).withOpacity(0.45)
+      ..strokeWidth = 0.8;
+
+    const double stepMinor = 24.0;
+    for (double x = 0; x < size.width; x += stepMinor) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), minorPaint);
+    }
+    for (double y = 0; y < size.height; y += stepMinor) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), minorPaint);
+    }
+
+    // 3. Major Grid Lines (96px step) with Coordinate Crosshairs
+    final majorPaint = Paint()
+      ..color = const Color(0xFF475569).withOpacity(0.75)
+      ..strokeWidth = 1.3;
+
+    final crossPaint = Paint()
+      ..color = const Color(0xFF10B981).withOpacity(0.65)
+      ..strokeWidth = 1.5;
+
+    const double stepMajor = 96.0;
+    for (double x = 0; x < size.width; x += stepMajor) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), majorPaint);
+    }
+    for (double y = 0; y < size.height; y += stepMajor) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), majorPaint);
+    }
+
+    // Intersection cross ticks
+    for (double x = 0; x < size.width; x += stepMajor) {
+      for (double y = 0; y < size.height; y += stepMajor) {
+        canvas.drawLine(Offset(x - 5, y), Offset(x + 5, y), crossPaint);
+        canvas.drawLine(Offset(x, y - 5), Offset(x, y + 5), crossPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
