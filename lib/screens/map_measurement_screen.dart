@@ -1138,21 +1138,26 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   }
 
   void _recalculate() {
-    if (_mode == MeasureMode.polygon || _mode == MeasureMode.walk) {
-      _areaM2 = calculatePolygonAreaM2(_polygonPoints);
-      _perimeterM = calculatePolygonPerimeterM(_polygonPoints);
-      _segmentLengths = calculateSegmentLengths(_polygonPoints, isClosed: true);
+    if (_mode == MeasureMode.circle) {
+      _areaM2 = calculateCircleAreaM2(_circleRadius);
+      _perimeterM = calculateCirclePerimeterM(_circleRadius);
+      _segmentLengths = [];
     } else if (_mode == MeasureMode.rectangle) {
       _areaM2 = _rectWidthM * _rectLengthM;
       _perimeterM = 2 * (_rectWidthM + _rectLengthM);
       _segmentLengths = calculateSegmentLengths(_polygonPoints, isClosed: true);
-    } else if (_mode == MeasureMode.distance) {
+    } else if (_polygonPoints.length >= 3) {
+      // ── Always compute enclosed Polygon Area whenever 3 or more points exist! ──
+      _areaM2 = calculatePolygonAreaM2(_polygonPoints);
+      _perimeterM = calculatePolygonPerimeterM(_polygonPoints);
+      _segmentLengths = calculateSegmentLengths(_polygonPoints, isClosed: true);
+    } else if (_polygonPoints.length == 2) {
       _areaM2 = 0;
-      _perimeterM = calculatePolylineLengthM(_polygonPoints);
+      _perimeterM = haversineDistance(_polygonPoints[0], _polygonPoints[1]);
       _segmentLengths = calculateSegmentLengths(_polygonPoints, isClosed: false);
-    } else if (_mode == MeasureMode.circle) {
-      _areaM2 = calculateCircleAreaM2(_circleRadius);
-      _perimeterM = calculateCirclePerimeterM(_circleRadius);
+    } else {
+      _areaM2 = 0;
+      _perimeterM = 0;
       _segmentLengths = [];
     }
 
@@ -3155,7 +3160,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                 onSave: _saveMeasurement,
                 onClear: _clearMeasurement,
                 bottomPadding: 0,
-                isDistanceMode: _mode == MeasureMode.distance,
+                isDistanceMode: _mode == MeasureMode.distance && _polygonPoints.length < 3,
                 segmentLengths: _segmentLengths,
                 parcelNames: parcelTabNames,
                 activeParcelIndex: _activeParcelIndex,

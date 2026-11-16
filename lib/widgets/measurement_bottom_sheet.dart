@@ -68,12 +68,12 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
   }
 
   bool _isExpanded = false;
-  String _selectedUnit = 'ម៉ែត្រការ៉េ (m²)';
+  String _selectedUnit = 'ហិកតា (Ha)'; // Default to Hectares (Ha) as requested
   double _pricePerM2 = 80.0;
   final List<String> _units = [
-    'ម៉ែត្រការ៉េ (m²)',
-    'អា (Are)',
     'ហិកតា (Ha)',
+    'អា (Are)',
+    'ម៉ែត្រការ៉េ (m²)',
     'ហ្វីតការ៉េ (ft²)',
     'Acres',
   ];
@@ -226,13 +226,17 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
   // 1. COMPACT HUD ROW (Clean, modern, high contrast)
   // ─────────────────────────────────────────────────────────────
   Widget _buildCompactHudRow(double are, double ha, int estPrice) {
-    final isDistance = widget.isDistanceMode;
+    // If 3 or more points exist or area > 0, ALWAYS treat as closed land area!
+    final bool showArea = widget.areaM2 > 0 || widget.pointsCount >= 3;
+    final bool isDistance = widget.isDistanceMode && !showArea;
+
     final primaryValue = isDistance
         ? '${widget.perimeterM.toStringAsFixed(1)} m'
         : _formatArea(widget.areaM2, _selectedUnit);
+
     final secondaryText = isDistance
         ? 'ចម្ងាយសរុប • ${widget.pointsCount} ចំណុច'
-        : '= ${are.toStringAsFixed(2)} អា  •  ${ha.toStringAsFixed(3)} Ha';
+        : '= ${are.toStringAsFixed(2)} អា  •  ${widget.areaM2.toStringAsFixed(1)} m²  •  ជុំវិញ ${widget.perimeterM.toStringAsFixed(1)}m';
 
     return Row(
       children: [
@@ -240,18 +244,26 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
         GestureDetector(
           onTap: () => setState(() => _isExpanded = !_isExpanded),
           child: Container(
-            width: 40,
-            height: 40,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color: _neuBg,
+              gradient: showArea
+                  ? const LinearGradient(colors: [Color(0xFF059669), Color(0xFF047857)])
+                  : null,
+              color: showArea ? null : _neuBg,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 1.5),
-              boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
+              boxShadow: [
+                if (showArea)
+                  BoxShadow(color: const Color(0xFF059669).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))
+                else
+                  ...neuExtrudedShadows(distance: 2.5, blur: 6),
+              ],
             ),
             child: Icon(
               isDistance ? Icons.straighten_rounded : Icons.landscape_rounded,
-              color: _neuCobalt,
-              size: 20,
+              color: showArea ? Colors.white : _neuCobalt,
+              size: 22,
             ),
           ),
         ),
@@ -267,28 +279,32 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      primaryValue,
-                      style: const TextStyle(
-                        color: _neuTextDark,
-                        fontSize: 18.5,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.4,
+                    Flexible(
+                      child: Text(
+                        primaryValue,
+                        style: TextStyle(
+                          color: showArea ? const Color(0xFF047857) : _neuTextDark,
+                          fontSize: 21.0,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.4,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                       decoration: BoxDecoration(
-                        color: _neuInputBg,
+                        color: showArea ? const Color(0xFF10B981).withOpacity(0.15) : _neuInputBg,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '${widget.pointsCount} បង្គោល',
-                        style: const TextStyle(
-                          color: _neuCobalt,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                        style: TextStyle(
+                          color: showArea ? const Color(0xFF047857) : _neuCobalt,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
@@ -301,6 +317,8 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -453,38 +471,101 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
         ),
         const SizedBox(height: 10),
 
+        // ── OFFICIAL TOTAL HECTARE HERO BANNER (ច្បាស់ៗ ធំៗ ងាយស្រួលមើល) ──
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF064E3B), Color(0xFF047857)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF047857).withOpacity(0.38),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.verified_rounded, color: _neuYellow, size: 17),
+                      SizedBox(width: 6),
+                      Text(
+                        'សរុបផ្ទៃក្រឡាផ្លូវការ (Total Land Area):',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${widget.pointsCount} បង្គោលព្រំ',
+                      style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${ha.toStringAsFixed(4)} ហិកតា (Ha)',
+                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 0.2),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '= ${are.toStringAsFixed(2)} អា  •  ${widget.areaM2.toStringAsFixed(1)} ម៉ែត្រការ៉េ (m²)',
+                style: const TextStyle(color: Color(0xFFA7F3D0), fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+        ),
+
         // ── 3-Metric Stats Row ──
         Row(
           children: [
-            // Perimeter
+            // 1. Hectares
             Expanded(
               child: _buildMetricTile(
-                icon: Icons.straighten_rounded,
-                iconColor: _neuCobalt,
-                title: 'បរិមាត្រជុំវិញ',
-                value: '${widget.perimeterM.toStringAsFixed(1)} m',
+                icon: Icons.landscape_rounded,
+                iconColor: const Color(0xFF047857),
+                title: 'ផ្ទៃដីហិកតា (Ha)',
+                value: '${ha.toStringAsFixed(4)} Ha',
               ),
             ),
             const SizedBox(width: 8),
 
-            // Corners / Points
-            Expanded(
-              child: _buildMetricTile(
-                icon: Icons.pin_drop_rounded,
-                iconColor: _neuYellow,
-                title: 'ចំនួនបង្គោលដី',
-                value: '${widget.pointsCount} ចំណុច',
-              ),
-            ),
-            const SizedBox(width: 8),
-
-            // Price Estimation
+            // 2. Are
             Expanded(
               child: _buildMetricTile(
                 icon: Icons.square_foot_rounded,
                 iconColor: const Color(0xFF10B981),
                 title: 'ទំហំគិតជា អា',
                 value: '${are.toStringAsFixed(2)} អា',
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // 3. Perimeter
+            Expanded(
+              child: _buildMetricTile(
+                icon: Icons.straighten_rounded,
+                iconColor: _neuCobalt,
+                title: 'បរិមាត្រជុំវិញ',
+                value: '${widget.perimeterM.toStringAsFixed(1)} m',
               ),
             ),
           ],
@@ -675,10 +756,10 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
   }
 
   String _formatArea(double m2, String unit) {
-    if (unit.contains('អា')) {
+    if (unit.contains('ហិកតា')) {
+      return '${(m2 / 10000).toStringAsFixed(4)} ហិកតា (Ha)';
+    } else if (unit.contains('អា')) {
       return '${(m2 / 100).toStringAsFixed(2)} អា';
-    } else if (unit.contains('ហិកតា')) {
-      return '${(m2 / 10000).toStringAsFixed(4)} Ha';
     } else if (unit.contains('ft²')) {
       return '${(m2 * 10.7639).toStringAsFixed(1)} ft²';
     } else if (unit.contains('Acres')) {
