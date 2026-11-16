@@ -1040,13 +1040,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Expanded(
                       child: _buildQuickToolCard(
-                        icon: Icons.bookmark_rounded,
-                        iconColor: const Color(0xFF8B5CF6),
-                        title: 'ប្រវត្តិប្លង់ដី',
-                        subtitle: 'ប្លង់បានរក្សាទុកក្នុងទូរស័ព្ទ',
+                        icon: Icons.camera_alt_rounded,
+                        iconColor: const Color(0xFFE11D48),
+                        title: 'កាមេរ៉ាវាស់ដី AR',
+                        subtitle: 'វាស់ប្រវែង, ផ្ទៃដី & កម្ពស់',
                         onTap: () {
                           Navigator.pop(ctx);
-                          setState(() => _currentNavIndex = 4);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const CameraMeasureScreen()),
+                          );
                         },
                       ),
                     ),
@@ -2535,44 +2538,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 10),
-
-              // AR Camera Measure Quick Tool
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CameraMeasureScreen()),
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.currentPrimary.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.currentPrimary.withOpacity(0.35), width: 1.3),
-                    boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.camera_alt_rounded, color: AppTheme.currentPrimary, size: 19),
-                      const SizedBox(width: 8),
-                      Text(
-                        'ម៉ាស៊ីនវាស់ប្រវែងតាមកាមេរ៉ា AR (Camera Measure)',
-                        style: TextStyle(
-                          color: AppTheme.currentPrimary,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
           ],
         ),
