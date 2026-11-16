@@ -12,6 +12,7 @@ import 'map_measurement_screen.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
 import 'login_screen.dart';
+import 'camera_measure_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -2527,6 +2528,42 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+
+              // AR Camera Measure Quick Tool (Picture 2 Exact Match)
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CameraMeasureScreen()),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: _neuBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.35), width: 1.3),
+                    boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.camera_alt_rounded, color: Color(0xFFE11D48), size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        '📷 ម៉ាស៊ីនវាស់ប្រវែងតាមកាមេរ៉ា AR (Camera Measure)',
+                        style: TextStyle(
+                          color: Color(0xFFBE123C),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
           ],
         ),

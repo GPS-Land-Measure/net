@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
+import 'camera_measure_screen.dart';
 import '../models/measurement.dart';
 import '../utils/geo_calculator.dart';
 import '../widgets/measurement_bottom_sheet.dart';
@@ -1215,42 +1216,31 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       setState(() => _mode = MeasureMode.walk);
     }
 
-    setState(() => _isWalking = true);
+    final startPoint = _userLocation ?? _currentCenter;
+    setState(() {
+      _isWalking = true;
+      if (_polygonPoints.isEmpty) {
+        _polygonPoints.add(startPoint);
+        _recalculate();
+      }
+    });
+    _safeMoveMap(startPoint, 18.5);
 
-    // 1. Immediately drop starting point at current GPS position
-    LatLng? startLoc = _userLocation;
-    if (startLoc == null) {
-      try {
-        final lastPos = await Geolocator.getLastKnownPosition();
-        if (lastPos != null) {
-          startLoc = LatLng(lastPos.latitude, lastPos.longitude);
-        }
-      } catch (_) {}
-    }
-
+    // 1. Refresh live GPS position in background
     try {
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.bestForNavigation,
         timeLimit: const Duration(seconds: 4),
       );
-      startLoc = LatLng(pos.latitude, pos.longitude);
-      _gpsAccuracy = pos.accuracy;
-      _gpsAltitude = pos.altitude;
+      if (mounted) {
+        setState(() {
+          _userLocation = LatLng(pos.latitude, pos.longitude);
+          _gpsAccuracy = pos.accuracy;
+          _gpsAltitude = pos.altitude;
+          _isGpsLocked = true;
+        });
+      }
     } catch (_) {}
-
-    startLoc ??= _currentCenter;
-
-    if (mounted) {
-      setState(() {
-        _userLocation = startLoc;
-        _isGpsLocked = true;
-        if (_polygonPoints.isEmpty) {
-          _polygonPoints.add(startLoc!);
-        }
-        _recalculate();
-      });
-      _safeMoveMap(startLoc, 18.5);
-    }
 
     // 2. High-precision continuous walking GPS stream
     const locationSettings = LocationSettings(
@@ -2849,6 +2839,20 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                       tooltip: 'ឧបករណ៍វាស់ស្ទង់ទំនើប',
                       onTap: () => _showSurveyorToolboxModal(context),
                     ),
+                    const SizedBox(height: 6),
+
+                    // AR Camera Measure (ម៉ាស៊ីនវាស់តាម Camera AR ដូចរូបទី២)
+                    _buildToolButton(
+                      icon: Icons.camera_alt_rounded,
+                      color: const Color(0xFFE11D48),
+                      tooltip: 'វាស់តាម Camera AR',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CameraMeasureScreen()),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -3005,7 +3009,22 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                           // 1. Manual Drop Pin here
                           Expanded(
                             child: GestureDetector(
-                              onTap: _addPointAtGps,
+                              onTap: () {
+                                _triggerFeedback();
+                                final pt = _userLocation ?? _currentCenter;
+                                setState(() {
+                                  _polygonPoints.add(pt);
+                                  _recalculate();
+                                });
+                                _safeMoveMap(pt);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('📍 បានដៅបង្គោលទី ${_polygonPoints.length} (${_perimeterM.toStringAsFixed(1)}m)'),
+                                    duration: const Duration(seconds: 1),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(vertical: 9),
                                 decoration: BoxDecoration(
