@@ -57,3 +57,4 @@ class CompassHelper {
     } catch (_) {}
   }
 }
+

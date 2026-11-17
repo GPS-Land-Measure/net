@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/camera_feed.dart';
 import '../utils/compass_helper.dart';
@@ -27,7 +30,7 @@ class ArMeasurePoint {
 }
 
 class _CameraMeasureScreenState extends State<CameraMeasureScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   CameraToolMode _currentMode = CameraToolMode.measure;
   bool _isLiveCameraActive = false;
   final _cameraController = CameraFeedController();
@@ -59,14 +62,97 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
   // Flash Capture Animation
   bool _showFlash = false;
 
+  // ── GPS Live Distance Tracking (Apple Measure-style) ──────────────────────
+  // GPS anchor points (real-world LatLng corresponding to each _points entry)
+  final List<LatLng> _gpsAnchorPoints = [];
+  LatLng? _currentGpsPosition;
+  double _liveGpsDistanceM = 0.0;      // Live distance from last anchor to current GPS
+  bool _isGpsTracking = false;         // True while measuring live
+  StreamSubscription<Position>? _gpsTrackingStream;
+  bool _gpsReady = false;              // GPS has first fix
+  double _gpsAccuracy = 0.0;           // Current GPS accuracy in meters
+
+  // Reticle pulsing animation
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnim;
+
   @override
   void initState() {
     super.initState();
     CompassHelper.init();
     _loadSavedRecords();
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-    ]);
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+    // Pulse animation for reticle while tracking
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    // Warm up GPS so first fix is fast
+    _initGps();
+  }
+
+  Future<void> _initGps() async {
+    try {
+      bool svc = await Geolocator.isLocationServiceEnabled();
+      if (!svc) return;
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+
+      // Get last known fast fix
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() {
+          _currentGpsPosition = LatLng(last.latitude, last.longitude);
+          _gpsAccuracy = last.accuracy;
+          _gpsReady = true;
+        });
+      }
+
+      // Start continuous background GPS stream for fast response
+      _gpsTrackingStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+        ),
+      ).listen((pos) {
+        if (!mounted) return;
+        final loc = LatLng(pos.latitude, pos.longitude);
+        setState(() {
+          _currentGpsPosition = loc;
+          _gpsAccuracy = pos.accuracy;
+          _gpsReady = true;
+        });
+        // If tracking: update live distance from last anchor
+        if (_isGpsTracking && _gpsAnchorPoints.isNotEmpty) {
+          final dist = _totalGpsDistance() + haversineDistance(_gpsAnchorPoints.last, loc);
+          setState(() => _liveGpsDistanceM = dist);
+        }
+      }, onError: (_) {});
+    } catch (_) {}
+  }
+
+  /// Total committed GPS distance (sum of locked segments)
+  double _totalGpsDistance() {
+    if (_gpsAnchorPoints.length < 2) return 0.0;
+    double sum = 0;
+    for (int i = 0; i < _gpsAnchorPoints.length - 1; i++) {
+      sum += haversineDistance(_gpsAnchorPoints[i], _gpsAnchorPoints[i + 1]);
+    }
+    return sum;
+  }
+
+  void _stopGpsTracking() {
+    _gpsTrackingStream?.cancel();
+    _gpsTrackingStream = null;
+    setState(() => _isGpsTracking = false);
   }
 
   Future<void> _loadSavedRecords() async {
@@ -103,18 +189,70 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
     HapticFeedback.lightImpact();
   }
 
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    _stopGpsTracking();
+    super.dispose();
+  }
+
+  /// GPS-powered tap: First tap = set anchor; subsequent taps = lock segment
   void _addPoint() {
     _triggerHaptic();
+    final gpsPos = _currentGpsPosition;
+
     setState(() {
       _undoHistory.add(List.from(_points));
       _points.add(_currentReticle);
     });
 
-    if (_points.length >= 2) {
-      final d = _computeDistanceMeters(_points[_points.length - 2], _points.last);
-      final txt = _formatDistance(d);
-      _saveRecord('ប្រវែង: $txt');
+    if ((_currentMode == CameraToolMode.measure || _currentMode == CameraToolMode.area) && gpsPos != null) {
+      // GPS-based tracking
+      _gpsAnchorPoints.add(gpsPos);
+      setState(() => _isGpsTracking = true);
+
+      if (_gpsAnchorPoints.length >= 2) {
+        final segDist = haversineDistance(_gpsAnchorPoints[_gpsAnchorPoints.length - 2], _gpsAnchorPoints.last);
+        final totalDist = _totalGpsDistance();
+        final txt = _formatGpsDistance(totalDist);
+        _saveRecord('GPS ចម្ងាយ: $txt');
+        setState(() { _liveGpsDistanceM = totalDist; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            const Icon(Icons.gps_fixed_rounded, color: Color(0xFF10B981), size: 16),
+            const SizedBox(width: 8),
+            Text('📍 ចំណុច ${_gpsAnchorPoints.length}: +${_formatGpsDistance(segDist)} (សរុប: $txt)'),
+          ]),
+          backgroundColor: const Color(0xFF0F172A),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ));
+      } else {
+        setState(() { _liveGpsDistanceM = 0; });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Row(children: [
+            Icon(Icons.radio_button_checked, color: Colors.white, size: 16),
+            SizedBox(width: 8),
+            Text('📍 ចំណុចចាប់ផ្តើម! ដើរបន្ត → ចម្ងាយ GPS ចេញ​តៗ'),
+          ]),
+          backgroundColor: Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } else {
+      // Pixel-based fallback (no GPS or height mode)
+      if (_points.length >= 2) {
+        final d = _computeDistanceMeters(_points[_points.length - 2], _points.last);
+        _saveRecord('ប្រវែង: ${_formatDistance(d)}');
+      }
     }
+  }
+
+  String _formatGpsDistance(double meters) {
+    if (meters < 1.0) return '${(meters * 100).toStringAsFixed(0)} cm';
+    if (meters < 1000) return '${meters.toStringAsFixed(2)} ម';
+    return '${(meters / 1000).toStringAsFixed(3)} គម';
   }
 
   void _undo() {
@@ -123,11 +261,18 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
       setState(() {
         _points.clear();
         _points.addAll(_undoHistory.removeLast());
+        // Also pop last GPS anchor
+        if (_gpsAnchorPoints.isNotEmpty) _gpsAnchorPoints.removeLast();
+        if (_gpsAnchorPoints.length < 2) { _liveGpsDistanceM = 0; }
+        if (_gpsAnchorPoints.isEmpty) _isGpsTracking = false;
       });
     } else if (_points.isNotEmpty) {
       _triggerHaptic();
       setState(() {
         _points.removeLast();
+        if (_gpsAnchorPoints.isNotEmpty) _gpsAnchorPoints.removeLast();
+        if (_gpsAnchorPoints.length < 2) { _liveGpsDistanceM = 0; }
+        if (_gpsAnchorPoints.isEmpty) _isGpsTracking = false;
       });
     }
   }
@@ -154,6 +299,9 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
               setState(() {
                 _undoHistory.clear();
                 _points.clear();
+                _gpsAnchorPoints.clear();
+                _liveGpsDistanceM = 0;
+                _isGpsTracking = false;
               });
             },
             child: const Text('លុបទាំងអស់', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -682,9 +830,11 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
                     Text(
                       _capturedPhotoUrl != null
                           ? '📸 បានថតរូបដីរួចរាល់: ចុចលើរូបដើម្បីវាស់ប្រវែង & ផ្ទៃក្រឡា'
-                          : (_isLiveCameraActive
-                              ? 'កាមេរ៉ាជាក់ស្តែង: ចុចលើអេក្រង់ ឬចុច + ដើម្បីវាស់'
-                              : 'តម្រង់កែវឆ្លុះ (+) រួចចុចប៊ូតុង + ដើម្បីវាស់'),
+                          : (_isGpsTracking
+                              ? '🚶‍♂️ កំពុងវាស់ចម្ងាយ GPS: សូមដើរទៅមុខ រួចចុច + នៅចំណុចបន្ទាប់'
+                              : (_isLiveCameraActive
+                                  ? 'កាមេរ៉ាជាក់ស្តែង: ចុចលើអេក្រង់ ឬចុច + ដើម្បីវាស់'
+                                  : 'តម្រង់កែវឆ្លុះ (+) រួចចុចប៊ូតុង + ដើម្បីវាស់')),
                       style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -785,8 +935,62 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ── Calibration / Distance Info Bar ──
-                if (_currentMode != CameraToolMode.level && _points.isNotEmpty)
+                // ── GPS Live Distance HUD ──────────────────────────────
+                if (_isGpsTracking && _points.isNotEmpty)
+                  AnimatedBuilder(
+                    animation: _pulseAnim,
+                    builder: (ctx, _) {
+                      final liveFromAnchor = (_isGpsTracking && _gpsAnchorPoints.isNotEmpty && _currentGpsPosition != null)
+                          ? _totalGpsDistance() + haversineDistance(_gpsAnchorPoints.last, _currentGpsPosition!)
+                          : _liveGpsDistanceM;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0B1623).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(color: const Color(0xFF10B981).withOpacity(_pulseAnim.value), width: 1.8),
+                          boxShadow: [
+                            BoxShadow(color: const Color(0xFF10B981).withOpacity(0.3 * _pulseAnim.value), blurRadius: 14),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Pulsing GPS dot
+                            Container(
+                              width: 10, height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: const Color(0xFF10B981).withOpacity(_pulseAnim.value),
+                                boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.5), blurRadius: 6)],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'GPS ចម្ងាយ: ${_formatGpsDistance(liveFromAnchor)}',
+                                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900),
+                                ),
+                                Text(
+                                  '📍 ${_gpsAnchorPoints.length} ចំណុច • ភាពច្បាស់ ±${_gpsAccuracy.toStringAsFixed(0)} ម',
+                                  style: const TextStyle(color: Colors.white60, fontSize: 10.5),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 10),
+                            const Icon(Icons.gps_fixed_rounded, color: Color(0xFF10B981), size: 16),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+
+                // ── Pixel-based / Area / Height Info Bar ──
+                if (_currentMode != CameraToolMode.level && _points.isNotEmpty && !_isGpsTracking)
                   GestureDetector(
                     onTap: () {
                       setState(() => _useMetricMeters = !_useMetricMeters);
@@ -808,6 +1012,25 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
                                 : 'សរុប: ${_formatDistance(_computeTotalDistance())} (${_points.length} ចំណុច)'),
                         style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
                       ),
+                    ),
+                  ),
+
+                // ── GPS No-Signal warning when + tapped but no GPS ──
+                if (!_gpsReady && _points.isNotEmpty && !_isGpsTracking)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.gps_off_rounded, color: Colors.white, size: 14),
+                        SizedBox(width: 6),
+                        Text('GPS មិនទាន់ត្រឹមត្រូវ — ប្រើស្ទង់ Screen', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
                     ),
                   ),
 

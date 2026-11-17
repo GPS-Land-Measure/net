@@ -1,5 +1,5 @@
 // GPS Land Measure - Production Offline Service Worker (PWA)
-const CACHE_NAME = 'gps-land-measure-v6';
+const CACHE_NAME = 'gps-land-measure-v7';
 const TILE_CACHE_NAME = 'gps-map-tiles-v1';
 
 const CORE_ASSETS = [
@@ -71,7 +71,9 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           // When offline in the field: serve cached tile from tile cache!
           return caches.open(TILE_CACHE_NAME).then((cache) => {
-            return cache.match(request, { ignoreSearch: true });
+            return cache.match(request, { ignoreSearch: true }).then((cached) => {
+              return cached || new Response('', { status: 404, statusText: 'Tile Not Cached' });
+            });
           });
         })
     );
@@ -91,7 +93,7 @@ self.addEventListener('fetch', (event) => {
               }
               return networkResponse;
             })
-            .catch(() => cachedResponse);
+            .catch(() => cachedResponse || new Response('', { status: 404 }));
         });
       })
     );

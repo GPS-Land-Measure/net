@@ -8,3 +8,4 @@ class CompassHelper {
   static void requestPermissionAndStart() {}
   static void startListening() {}
 }
+
