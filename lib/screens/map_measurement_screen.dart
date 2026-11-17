@@ -175,45 +175,52 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   final List<Map<String, String>> _mapStyles = [
     {
       'name': 'ផ្កាយរណប Google (Hybrid HD)',
-      'url': 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+      'url': 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
       'icon': '🛰️',
       'maxNativeZoom': '20',
+      'subdomains': '0,1,2,3',
     },
     {
       'name': 'ផ្កាយរណបសុទ្ធ (Google Satellite)',
-      'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      'url': 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
       'icon': '📡',
       'maxNativeZoom': '20',
+      'subdomains': '0,1,2,3',
     },
     {
       'name': 'ផែនទីផ្លូវថ្នល់ (Google Streets)',
-      'url': 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+      'url': 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
       'icon': '🗺️',
       'maxNativeZoom': '20',
+      'subdomains': '0,1,2,3',
     },
     {
       'name': 'ផ្កាយរណប ArcGIS World (High Clarity)',
       'url': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       'icon': '🌐',
       'maxNativeZoom': '19',
+      'subdomains': '',
     },
     {
       'name': 'ផែនទី OpenStreetMap',
       'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       'icon': '🌍',
       'maxNativeZoom': '19',
+      'subdomains': 'a,b,c',
     },
     {
       'name': 'ទេសភាពដី (Topo)',
       'url': 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
       'icon': '⛰️',
       'maxNativeZoom': '17',
+      'subdomains': 'a,b,c',
     },
     {
       'name': 'ប្លង់ក្រឡាសុរិយោដី (Cadastral Grid Offline)',
       'url': '',
       'icon': '📐',
       'maxNativeZoom': '22',
+      'subdomains': '',
     },
   ];
 
@@ -320,9 +327,44 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       final prefs = await SharedPreferences.getInstance();
       final list = prefs.getStringList('measurements') ?? [];
       if (!mounted) return;
-      setState(() {
-        _savedMeasurements = list.map((s) => Measurement.fromJsonString(s)).toList();
-      });
+      if (list.isNotEmpty) {
+        setState(() {
+          _savedMeasurements = list.map((s) => Measurement.fromJsonString(s)).toList();
+        });
+      } else {
+        // Preload sample demonstration pins for real-world testing (Belga Farm & Independence Monument)
+        final demoParcels = [
+          Measurement(
+            id: 'demo_belga_farm',
+            name: 'កសិដ្ឋាន Belga Farm (៣០.៣៦ ហិកតា)',
+            type: MeasurementType.polygon,
+            areaM2: 303555.0,
+            perimeterM: 2280.0,
+            createdAt: DateTime.now().subtract(const Duration(days: 1)),
+            points: [
+              {'lat': 11.5833, 'lng': 104.7500},
+              {'lat': 11.5860, 'lng': 104.7530},
+              {'lat': 11.5840, 'lng': 104.7580},
+              {'lat': 11.5800, 'lng': 104.7560},
+              {'lat': 11.5790, 'lng': 104.7520},
+            ],
+          ),
+          Measurement(
+            id: 'demo_independence_monument',
+            name: 'បរិវេណវិមានឯករាជ្យ (រង្វង់មូល)',
+            type: MeasurementType.circle,
+            areaM2: 12500.0,
+            perimeterM: 396.0,
+            createdAt: DateTime.now().subtract(const Duration(days: 3)),
+            centerLat: 11.5564,
+            centerLng: 104.9282,
+            radiusM: 63.0,
+          ),
+        ];
+        setState(() {
+          _savedMeasurements = demoParcels;
+        });
+      }
     } catch (_) {}
   }
 
@@ -1324,17 +1366,20 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
 
   bool get _canSave {
     if (_mode == MeasureMode.circle || _mode == MeasureMode.rectangle) return true;
-    if (_mode == MeasureMode.distance) return _polygonPoints.length >= 2;
-    return _polygonPoints.length >= 3 || _completedParcels.isNotEmpty;
+    return _polygonPoints.length >= 2 || _completedParcels.isNotEmpty;
   }
 
   Future<void> _saveMeasurement() async {
+    final isDistance = _mode == MeasureMode.distance || _polygonPoints.length < 3;
+    final areaHa = _totalCombinedAreaM2 / 10000;
     final nameController = TextEditingController(
       text: _mode == MeasureMode.rectangle
           ? 'ឡូតិ៍ដី (${_rectWidthM.toInt()}m x ${_rectLengthM.toInt()}m)'
           : (_mode == MeasureMode.circle
               ? 'ប្លង់ដីរង្វង់មូល'
-              : (_mode == MeasureMode.distance ? 'ខ្សែចម្ងាយព្រំដី' : 'ប្លង់ដីពហុកោណ')),
+              : (isDistance
+                  ? 'ខ្សែប្រវែងព្រំដី (${_perimeterM.toStringAsFixed(1)}m)'
+                  : (areaHa >= 0.01 ? 'ប្លង់ដី ${areaHa.toStringAsFixed(2)} ហិកតា' : 'ប្លង់ដី ${_totalCombinedAreaM2.toInt()}m²'))),
     );
 
     final name = await showDialog<String>(
@@ -1366,13 +1411,15 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                 child: const Icon(Icons.bookmark_add_rounded, color: _neuCobalt, size: 28),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'រក្សាទុកប្លង់ដី',
-                style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.w900, fontSize: 18),
+              Text(
+                isDistance ? 'រក្សាទុកខ្សែប្រវែងព្រំដី' : 'រក្សាទុកប្លង់ដី',
+                style: const TextStyle(color: _neuTextDark, fontWeight: FontWeight.w900, fontSize: 18),
               ),
               const SizedBox(height: 6),
               Text(
-                'ផ្ទៃក្រឡាសរុប: ${_totalCombinedAreaM2.toStringAsFixed(1)} m² (= ${(_totalCombinedAreaM2 / 100).toStringAsFixed(2)} អា)',
+                isDistance
+                    ? 'ប្រវែងសរុប: ${_perimeterM.toStringAsFixed(1)} ម៉ែត្រ (${_polygonPoints.length} បង្គោល)'
+                    : 'ផ្ទៃក្រឡាសរុប: ${_totalCombinedAreaM2.toStringAsFixed(1)} m² (= ${(_totalCombinedAreaM2 / 100).toStringAsFixed(2)} អា / ${areaHa.toStringAsFixed(4)} ហិកតា)',
                 style: const TextStyle(color: _neuTextMuted, fontSize: 12.5, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 18),
@@ -1452,11 +1499,12 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
 
     if (name == null || name.isEmpty) return;
 
+    final isDist = _mode == MeasureMode.distance || _polygonPoints.length < 3;
     final m = Measurement(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
       type: _mode == MeasureMode.circle ? MeasurementType.circle : MeasurementType.polygon,
-      areaM2: _totalCombinedAreaM2,
+      areaM2: isDist ? 0 : _totalCombinedAreaM2,
       perimeterM: _perimeterM,
       createdAt: DateTime.now(),
       points: _polygonPoints.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList(),
@@ -1469,6 +1517,19 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
     final list = prefs.getStringList('measurements') ?? [];
     list.add(m.toJsonString());
     await prefs.setStringList('measurements', list);
+    if (mounted) {
+      setState(() {
+        _savedMeasurements.insert(0, m);
+        _showSavedPins = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📍 បានដោត Pin រក្សាទុកដី "$name" រួចរាល់!'),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
     widget.onSaved?.call();
   }
 
@@ -2503,6 +2564,9 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   if (currentTile['url']!.isNotEmpty)
                     TileLayer(
                       urlTemplate: currentTile['url']!,
+                      subdomains: (currentTile['subdomains'] ?? '').isNotEmpty
+                          ? currentTile['subdomains']!.split(',')
+                          : const [],
                       maxZoom: 22,
                       maxNativeZoom: int.tryParse(currentTile['maxNativeZoom'] ?? '20') ?? 20,
                       userAgentPackageName: 'com.example.my_first_app',
@@ -2980,26 +3044,12 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                     ),
                     const SizedBox(height: 6),
 
-                    // Toggle Saved Measured Land Pins (បង្ហាញ/លាក់ ដីធ្លាប់វាស់)
+                    // Interactive Real Land Pin Tool (ដោត Pin ទីតាំងដីពិតៗ / បង្ហាញដីធ្លាប់វាស់)
                     _buildToolButton(
                       icon: Icons.push_pin_rounded,
-                      color: _showSavedPins ? const Color(0xFFF59E0B) : _neuTextMuted,
-                      tooltip: _showSavedPins ? 'លាក់ដីធ្លាប់វាស់' : 'បង្ហាញដីធ្លាប់វាស់',
-                      onTap: () {
-                        _triggerFeedback();
-                        setState(() => _showSavedPins = !_showSavedPins);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              _showSavedPins
-                                  ? '📍 បានបង្ហាញ Pin ដីធ្លាប់វាស់ (${_savedMeasurements.length} កន្លែង)'
-                                  : '📍 បានលាក់ Pin ដីធ្លាប់វាស់',
-                            ),
-                            duration: const Duration(seconds: 1),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
+                      color: const Color(0xFFF59E0B),
+                      tooltip: 'ដោត Pin ដី / បង្ហាញដីធ្លាប់វាស់',
+                      onTap: _handlePinToolAction,
                     ),
                     const SizedBox(height: 6),
 
@@ -5910,7 +5960,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
 
       final areaText = m.areaM2 >= 10000
           ? '${(m.areaM2 / 10000).toStringAsFixed(2)} Ha'
-          : '${m.areaM2.toInt()} m²';
+          : (m.areaM2 > 0 ? '${m.areaM2.toInt()} m²' : '📍 ចំណុចដៅ');
 
       markers.add(
         Marker(
@@ -5976,6 +6026,442 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       );
     }
     return markers;
+  }
+
+  void _handlePinToolAction() {
+    _triggerFeedback();
+    if (_canSave) {
+      _showPinAndSaveModal();
+    } else {
+      _showPinManagementModal();
+    }
+  }
+
+  void _showPinAndSaveModal() {
+    final isDistance = _mode == MeasureMode.distance || _polygonPoints.length < 3;
+    final areaHa = _totalCombinedAreaM2 / 10000;
+    final defaultTitle = _mode == MeasureMode.circle
+        ? 'ដីរង្វង់មូល (${_totalCombinedAreaM2.toInt()}m²)'
+        : (_mode == MeasureMode.rectangle
+            ? 'ឡូតិ៍ដី (${_rectWidthM.toInt()}x${_rectLengthM.toInt()}m)'
+            : (isDistance
+                ? 'ខ្សែប្រវែងព្រំដី (${_perimeterM.toStringAsFixed(1)}m)'
+                : (areaHa >= 0.01 ? 'ក្បាលដី ${areaHa.toStringAsFixed(2)} ហិកតា' : 'ក្បាលដី ${_totalCombinedAreaM2.toInt()}m²')));
+
+    final subtitle = isDistance
+        ? 'ប្រវែង ${_perimeterM.toStringAsFixed(1)} ម៉ែត្រ (${_polygonPoints.length} បង្គោល)'
+        : '${areaHa.toStringAsFixed(4)} ហិកតា • ${_polygonPoints.length} បង្គោល (${_totalCombinedAreaM2.toStringAsFixed(1)} m²)';
+
+    final nameCtrl = TextEditingController(text: defaultTitle);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          decoration: BoxDecoration(
+            color: _neuBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: Colors.white, width: 1.5),
+            boxShadow: neuExtrudedShadows(distance: 6, blur: 20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(color: _neuDarkShadow.withOpacity(0.6), borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF59E0B),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.push_pin_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isDistance ? 'ដោត Pin ខ្សែប្រវែងព្រំដីនេះ' : 'ដោត Pin រក្សាទុកក្បាលដីនេះ',
+                          style: const TextStyle(color: _neuTextDark, fontSize: 16, fontWeight: FontWeight.w900),
+                        ),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(color: Color(0xFF047857), fontSize: 11.5, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameCtrl,
+                style: const TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  labelText: 'ឈ្មោះប្លង់ដីសម្រាប់ដោត Pin',
+                  labelStyle: const TextStyle(color: _neuTextMuted, fontSize: 12),
+                  filled: true,
+                  fillColor: _neuInputBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white, width: 1.2),
+                          boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                        ),
+                        child: const Center(
+                          child: Text('បោះបង់', style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final title = nameCtrl.text.trim().isEmpty ? defaultTitle : nameCtrl.text.trim();
+                        Navigator.pop(ctx);
+
+                        final m = Measurement(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          name: title,
+                          type: _mode == MeasureMode.circle ? MeasurementType.circle : MeasurementType.polygon,
+                          areaM2: isDistance ? 0 : _totalCombinedAreaM2,
+                          perimeterM: _perimeterM,
+                          createdAt: DateTime.now(),
+                          points: _polygonPoints.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList(),
+                          centerLat: _mode == MeasureMode.circle ? _circleCenter.latitude : null,
+                          centerLng: _mode == MeasureMode.circle ? _circleCenter.longitude : null,
+                          radiusM: _mode == MeasureMode.circle ? _circleRadius : null,
+                        );
+
+                        final prefs = await SharedPreferences.getInstance();
+                        final list = prefs.getStringList('measurements') ?? [];
+                        list.add(m.toJsonString());
+                        await prefs.setStringList('measurements', list);
+
+                        if (mounted) {
+                          setState(() {
+                            _savedMeasurements.insert(0, m);
+                            _showSavedPins = true;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('📍 បានដោត Pin ដី "$title" លើផែនទីជោគជ័យ!'),
+                              duration: const Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                        widget.onSaved?.call();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFD97706)]),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(color: const Color(0xFFF59E0B).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.push_pin_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text('ដោត Pin លើផែនទីភ្លាមៗ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPinManagementModal() {
+    final dropPoint = _userLocation ?? _currentCenter;
+    final nameCtrl = TextEditingController(text: 'ទីតាំងសម្គាល់ (${dropPoint.latitude.toStringAsFixed(4)}°, ${dropPoint.longitude.toStringAsFixed(4)}°)');
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            decoration: BoxDecoration(
+              color: _neuBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: Colors.white, width: 1.5),
+              boxShadow: neuExtrudedShadows(distance: 6, blur: 20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(color: _neuDarkShadow.withOpacity(0.6), borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.push_pin_rounded, color: Color(0xFFF59E0B), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'ប្រព័ន្ធដោត Pin ទីតាំងដី',
+                          style: TextStyle(color: _neuTextDark, fontSize: 16, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _showSavedPins = !_showSavedPins);
+                        setModalState(() {});
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _showSavedPins ? const Color(0xFF10B981).withOpacity(0.15) : _neuInputBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: _showSavedPins ? const Color(0xFF10B981) : _neuDarkShadow, width: 1),
+                        ),
+                        child: Text(
+                          _showSavedPins ? '✓ បង្ហាញលើផែនទី' : '✕ បានលាក់លើផែនទី',
+                          style: TextStyle(
+                            color: _showSavedPins ? const Color(0xFF047857) : _neuTextMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Quick Action: Drop Pin at Crosshair/Center
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _neuInputBg,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'ដោត Pin សម្គាល់ទីតាំងកណ្តាលបច្ចុប្បន្ន (Drop Pin):',
+                        style: TextStyle(color: _neuTextDark, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: nameCtrl,
+                        style: const TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          hintText: 'ឈ្មោះទីតាំង (ឧ. ដីកែងផ្លូវ 30m, ផ្ទះ, ដីស្រែ...)',
+                          hintStyle: const TextStyle(color: _neuTextMuted, fontSize: 11.5),
+                          filled: true,
+                          fillColor: _neuBg,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF59E0B),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          icon: const Icon(Icons.add_location_alt_rounded, color: Colors.white, size: 16),
+                          label: const Text('ដោត Pin ចំណុចនេះ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                          onPressed: () async {
+                            final title = nameCtrl.text.trim().isEmpty ? 'ទីតាំងសម្គាល់' : nameCtrl.text.trim();
+                            Navigator.pop(ctx);
+
+                            final m = Measurement(
+                              id: DateTime.now().millisecondsSinceEpoch.toString(),
+                              name: title,
+                              type: MeasurementType.polygon,
+                              areaM2: 0,
+                              perimeterM: 0,
+                              createdAt: DateTime.now(),
+                              points: [
+                                {'lat': dropPoint.latitude, 'lng': dropPoint.longitude},
+                              ],
+                            );
+
+                            final prefs = await SharedPreferences.getInstance();
+                            final list = prefs.getStringList('measurements') ?? [];
+                            list.add(m.toJsonString());
+                            await prefs.setStringList('measurements', list);
+
+                            if (mounted) {
+                              setState(() {
+                                _savedMeasurements.insert(0, m);
+                                _showSavedPins = true;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('📍 បានដោត Pin "$title" ជោគជ័យ!'),
+                                  duration: const Duration(seconds: 2),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // List of Pinned Lands
+                Text(
+                  'ដីដែលបានដោត Pin (${_savedMeasurements.length} កន្លែង)៖',
+                  style: const TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: _savedMeasurements.isEmpty
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Text('មិនទាន់មានដីដោត Pin នៅឡើយទេ', style: TextStyle(color: _neuTextMuted, fontSize: 12)),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _savedMeasurements.length,
+                          itemBuilder: (context, i) {
+                            final m = _savedMeasurements[i];
+                            final areaText = m.areaM2 >= 10000
+                                ? '${(m.areaM2 / 10000).toStringAsFixed(2)} ហិកតា'
+                                : (m.areaM2 > 0 ? '${m.areaM2.toInt()} m²' : '📍 ចំណុចដៅ');
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _neuBg,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white, width: 1),
+                                boxShadow: neuExtrudedShadows(distance: 1.5, blur: 4),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.push_pin_rounded, color: Color(0xFFF59E0B), size: 16),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          m.name,
+                                          style: const TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          areaText,
+                                          style: const TextStyle(color: Color(0xFF047857), fontWeight: FontWeight.w700, fontSize: 10.5),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.center_focus_strong_rounded, color: _neuCobalt, size: 18),
+                                    tooltip: 'ហោះទៅមើល',
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      final center = _getMeasurementCenter(m);
+                                      if (center != null) _safeMoveMap(center, 18.0);
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                    tooltip: 'លុប',
+                                    onPressed: () async {
+                                      final prefs = await SharedPreferences.getInstance();
+                                      final list = prefs.getStringList('measurements') ?? [];
+                                      list.removeWhere((s) {
+                                        try {
+                                          final parsed = Measurement.fromJsonString(s);
+                                          return parsed.id == m.id;
+                                        } catch (_) {
+                                          return false;
+                                        }
+                                      });
+                                      await prefs.setStringList('measurements', list);
+                                      setState(() {
+                                        _savedMeasurements.removeAt(i);
+                                      });
+                                      setModalState(() {});
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showSavedParcelDetailModal(Measurement m) {

@@ -227,17 +227,31 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
   // 1. COMPACT HUD ROW (Clean, modern, high contrast)
   // ─────────────────────────────────────────────────────────────
   Widget _buildCompactHudRow(double are, double ha, int estPrice) {
-    // If 3 or more points exist or area > 0, ALWAYS treat as closed land area!
-    final bool showArea = widget.areaM2 > 0 || widget.pointsCount >= 3;
-    final bool isDistance = widget.isDistanceMode && !showArea;
+    // Smart Adaptive Metric State: Area (3+ points) vs Distance/Line (2 points)
+    final bool hasArea = (widget.areaM2 > 0 || widget.pointsCount >= 3) && !widget.isDistanceMode;
+    final bool isLineOrDistance = widget.pointsCount == 2 || widget.isDistanceMode;
 
-    final primaryValue = isDistance
-        ? '${widget.perimeterM.toStringAsFixed(1)} m'
-        : _formatArea(widget.areaM2, _selectedUnit);
+    String primaryValue;
+    String secondaryText;
+    Color primaryColor = _neuTextDark;
 
-    final secondaryText = isDistance
-        ? 'ចម្ងាយសរុប • ${widget.pointsCount} ចំណុច'
-        : '= ${are.toStringAsFixed(2)} អា  •  ${widget.areaM2.toStringAsFixed(1)} m²  •  ជុំវិញ ${widget.perimeterM.toStringAsFixed(1)}m';
+    if (hasArea) {
+      primaryValue = _formatArea(widget.areaM2, _selectedUnit);
+      secondaryText = '= ${are.toStringAsFixed(2)} អា  •  ${widget.areaM2.toStringAsFixed(1)} m²  •  ជុំវិញ ${widget.perimeterM.toStringAsFixed(1)}m';
+      primaryColor = const Color(0xFF047857);
+    } else if (isLineOrDistance) {
+      primaryValue = '${widget.perimeterM.toStringAsFixed(1)} ម៉ែត្រ';
+      secondaryText = 'ប្រវែង ២ បង្គោល • ចុចថែមបង្គោលទី ៣ ដើម្បីចេញផ្ទៃដី';
+      primaryColor = const Color(0xFF0284C7);
+    } else if (widget.pointsCount == 1) {
+      primaryValue = 'បង្គោលទី ១';
+      secondaryText = 'ចុចដៅបង្គោលបន្ទាប់ដើម្បីវាស់ប្រវែង ឬផ្ទៃដី';
+      primaryColor = _neuCobalt;
+    } else {
+      primaryValue = '០.០០ ហិកតា';
+      secondaryText = 'មិនទាន់មានទិន្នន័យ (ចុចលើផែនទីដើម្បីវាស់)';
+      primaryColor = _neuTextMuted;
+    }
 
     return Row(
       children: [
@@ -248,22 +262,24 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              gradient: showArea
+              gradient: hasArea
                   ? const LinearGradient(colors: [Color(0xFF059669), Color(0xFF047857)])
-                  : null,
-              color: showArea ? null : _neuBg,
+                  : (isLineOrDistance
+                      ? const LinearGradient(colors: [Color(0xFF0284C7), Color(0xFF0369A1)])
+                      : null),
+              color: (hasArea || isLineOrDistance) ? null : _neuBg,
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 1.5),
               boxShadow: [
-                if (showArea)
-                  BoxShadow(color: const Color(0xFF059669).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))
+                if (hasArea || isLineOrDistance)
+                  BoxShadow(color: (hasArea ? const Color(0xFF059669) : const Color(0xFF0284C7)).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))
                 else
                   ...neuExtrudedShadows(distance: 2.5, blur: 6),
               ],
             ),
             child: Icon(
-              isDistance ? Icons.straighten_rounded : Icons.landscape_rounded,
-              color: showArea ? Colors.white : _neuCobalt,
+              hasArea ? Icons.landscape_rounded : Icons.straighten_rounded,
+              color: (hasArea || isLineOrDistance) ? Colors.white : _neuCobalt,
               size: 22,
             ),
           ),
@@ -281,29 +297,36 @@ class _MeasurementBottomSheetState extends State<MeasurementBottomSheet> {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(
-                        primaryValue,
-                        style: TextStyle(
-                          color: showArea ? const Color(0xFF047857) : _neuTextDark,
-                          fontSize: 21.0,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.4,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          primaryValue,
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontSize: 17.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.3,
+                          ),
+                          maxLines: 1,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                       decoration: BoxDecoration(
-                        color: showArea ? const Color(0xFF10B981).withOpacity(0.15) : _neuInputBg,
+                        color: hasArea
+                            ? const Color(0xFF10B981).withOpacity(0.15)
+                            : (isLineOrDistance ? const Color(0xFF0284C7).withOpacity(0.15) : _neuInputBg),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '${widget.pointsCount} បង្គោល',
                         style: TextStyle(
-                          color: showArea ? const Color(0xFF047857) : _neuCobalt,
+                          color: hasArea
+                              ? const Color(0xFF047857)
+                              : (isLineOrDistance ? const Color(0xFF0284C7) : _neuCobalt),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w900,
                         ),
