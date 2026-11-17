@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/camera_feed.dart';
+import '../utils/compass_helper.dart';
+import '../utils/geo_calculator.dart';
 
 /// ═══════════════════════════════════════════════════════════════════════════
 /// AR CAMERA MEASURE & DIGITAL LEVEL SCREEN (ម៉ាស៊ីនវាស់ប្រវែងតាម Camera AR)
@@ -60,6 +62,7 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
   @override
   void initState() {
     super.initState();
+    CompassHelper.init();
     _loadSavedRecords();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -701,16 +704,24 @@ class _CameraMeasureScreenState extends State<CameraMeasureScreen>
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: Colors.white24, width: 0.8),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.explore_rounded, color: Color(0xFFFBBF24), size: 14),
-                  SizedBox(width: 5),
-                  Text(
-                    '148° SE (ទិសអាគ្នេយ៍)',
-                    style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
-                  ),
-                ],
+              child: ValueListenableBuilder<double>(
+                valueListenable: CompassHelper.headingNotifier,
+                builder: (context, heading, _) {
+                  final h = heading.isNaN ? 0.0 : heading;
+                  final dirShort = getCompassDirectionShort(h);
+                  final dirKhmer = getCompassDirectionKhmer(h);
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.explore_rounded, color: Color(0xFFFBBF24), size: 14),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${h.toInt()}° $dirShort ($dirKhmer)',
+                        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),

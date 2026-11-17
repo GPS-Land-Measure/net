@@ -15,6 +15,7 @@ import '../utils/geo_calculator.dart';
 import '../widgets/measurement_bottom_sheet.dart';
 import '../utils/app_theme.dart';
 import '../utils/offline_helper.dart';
+import '../utils/compass_helper.dart';
 
 enum MeasureMode { polygon, rectangle, circle, distance, walk }
 
@@ -148,6 +149,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   bool _showCornerAngles = true; // Corner interior angles ∠ (90° square check)
   bool _showSideBearings = true; // Side distance and azimuth bearings
   bool _showCompassHUD = true; // Floating compass rose dial
+  bool _autoFollowHeading = false; // Auto-rotate map with compass heading
   bool _isMapReady = false;
   double _mapRotation = 0.0;
 
@@ -273,6 +275,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   @override
   void initState() {
     super.initState();
+    CompassHelper.init();
     AppTheme.primaryColor.addListener(_onThemeChanged);
     _mode = widget.initialMode;
     _loadPreferences();
@@ -4147,57 +4150,348 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // FLOATING COMPASS ROSE WIDGET
+  // ─────────────────────────────────────────────────────────────
+  // FLOATING COMPASS ROSE WIDGET (ត្រីវិស័យស្ទង់ដីដំណើរការផ្ទាល់)
   // ─────────────────────────────────────────────────────────────
   Widget _buildCompassRoseWidget() {
-    return GestureDetector(
-      onTap: () {
-        if (_isMapReady) {
-          try {
-            _mapController.rotate(0.0);
-          } catch (_) {}
-          setState(() {
-            _mapRotation = 0.0;
-          });
-        }
+    return ValueListenableBuilder<double>(
+      valueListenable: CompassHelper.headingNotifier,
+      builder: (context, heading, _) {
+        final h = heading.isNaN ? 0.0 : heading;
+        final dirShort = getCompassDirectionShort(h);
+
+        // Needle angle accounts for phone heading and map rotation
+        final needleAngle = -((h + _mapRotation) * math.pi / 180.0);
+
+        return GestureDetector(
+          onTap: () {
+            _triggerFeedback();
+            CompassHelper.requestPermissionAndStart();
+            _showDigitalCompassModal(context);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: _neuBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white, width: 1.4),
+              boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _neuInputBg,
+                    shape: BoxShape.circle,
+                    boxShadow: neuRecessedShadows(),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Smooth Rotating Magnetic Needle
+                      Transform.rotate(
+                        angle: needleAngle,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.navigation_rounded, color: Color(0xFFEF4444), size: 16),
+                            Transform.rotate(
+                              angle: math.pi,
+                              child: const Icon(Icons.navigation_rounded, color: _neuDarkShadow, size: 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Positioned(
+                        top: 2,
+                        child: Text(
+                          'N',
+                          style: TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontSize: 7.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${h.toInt()}° $dirShort',
+                  style: const TextStyle(
+                    color: _neuTextDark,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
       },
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: _neuBg,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 1.4),
-          boxShadow: neuExtrudedShadows(distance: 2.5, blur: 6),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Transform.rotate(
-              angle: -(_mapRotation * math.pi / 180.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+    );
+  }
+
+  void _showDigitalCompassModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.35),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          decoration: BoxDecoration(
+            color: _neuBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(color: Colors.white, width: 1.5),
+            boxShadow: neuExtrudedShadows(distance: 8, blur: 24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4.5,
+                  decoration: BoxDecoration(color: _neuDarkShadow.withOpacity(0.6), borderRadius: BorderRadius.circular(2.5)),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Title
+              Row(
                 children: [
-                  const Icon(Icons.navigation_rounded, color: Color(0xFFEF4444), size: 17),
-                  Transform.rotate(
-                    angle: math.pi,
-                    child: const Icon(Icons.navigation_rounded, color: _neuDarkShadow, size: 11),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFB91C1C)]),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: const Color(0xFFEF4444).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                      ],
+                    ),
+                    child: const Icon(Icons.explore_rounded, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('ត្រីវិស័យស្ទង់ដី & កូអរដោនេ WGS84', style: TextStyle(color: _neuTextDark, fontSize: 16, fontWeight: FontWeight.w900)),
+                        Text('ទិសដៅម៉ាញេទិក និងមុំដឺក្រេជាក់ស្តែងតាមទូរស័ព្ទ', style: TextStyle(color: _neuTextMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-            const Positioned(
-              top: 2,
-              child: Text(
-                'N',
-                style: TextStyle(
-                  color: Color(0xFFEF4444),
-                  fontSize: 7.5,
-                  fontWeight: FontWeight.w900,
+              const SizedBox(height: 16),
+
+              // Large Animated Compass Dial & Readout
+              ValueListenableBuilder<double>(
+                valueListenable: CompassHelper.headingNotifier,
+                builder: (context, heading, _) {
+                  final h = heading.isNaN ? 0.0 : heading;
+                  final dirShort = getCompassDirectionShort(h);
+                  final dirKhmer = getCompassDirectionKhmer(h);
+                  final needleRad = -(h * math.pi / 180.0);
+
+                  return Column(
+                    children: [
+                      Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E2638),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFEF4444), width: 2),
+                          boxShadow: [
+                            BoxShadow(color: const Color(0xFFEF4444).withOpacity(0.35), blurRadius: 16),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Cardinal Ticks
+                            const Positioned(top: 8, child: Text('N', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w900, fontSize: 13))),
+                            const Positioned(bottom: 8, child: Text('S', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 11))),
+                            const Positioned(right: 10, child: Text('E', style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11))),
+                            const Positioned(left: 10, child: Text('W', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 11))),
+
+                            // Rotating Compass Needle
+                            Transform.rotate(
+                              angle: needleRad,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 4,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFDC2626)]),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                  ),
+                                  Container(
+                                    width: 4,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white38,
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Degree & Direction Text
+                      Text(
+                        '${h.toStringAsFixed(1)}° $dirShort',
+                        style: const TextStyle(color: _neuTextDark, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                      ),
+                      Text(
+                        'ទិស$dirKhmer',
+                        style: const TextStyle(color: Color(0xFF047857), fontSize: 13.5, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // GPS & Altitude Info
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _neuInputBg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        const Text('កូអរដោនេ Lat, Lng', style: TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_currentCenter.latitude.toStringAsFixed(5)}°, ${_currentCenter.longitude.toStringAsFixed(5)}°',
+                          style: const TextStyle(color: _neuTextDark, fontSize: 11, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                    Container(width: 1, height: 24, color: Colors.black12),
+                    Column(
+                      children: [
+                        const Text('កម្ពស់ដី (Altitude)', style: TextStyle(color: _neuTextMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '+${_gpsAltitude.toStringAsFixed(1)} ម៉ែត្រ',
+                          style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+
+              // Action Buttons: Reset North Up & Auto-follow Heading
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        if (_isMapReady) {
+                          _mapController.rotate(0.0);
+                          setState(() => _mapRotation = 0.0);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('🧭 បានតម្រង់ផែនទីទៅទិសខាងជើងត្រង់ (North Up)'),
+                              duration: Duration(seconds: 1),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _neuBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white, width: 1.2),
+                          boxShadow: neuExtrudedShadows(distance: 2, blur: 5),
+                        ),
+                        child: const Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.north_rounded, color: Color(0xFFEF4444), size: 16),
+                              SizedBox(width: 4),
+                              Text('តម្រង់ទិសជើង (0°)', style: TextStyle(color: _neuTextDark, fontWeight: FontWeight.bold, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        final currentHeading = CompassHelper.headingNotifier.value;
+                        Navigator.pop(ctx);
+                        if (_isMapReady) {
+                          _mapController.rotate(-currentHeading);
+                          setState(() => _mapRotation = -currentHeading);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('🧭 បានបង្វិលផែនទីតាមទិសដៅទូរស័ព្ទ (${currentHeading.toInt()}°)'),
+                              duration: const Duration(seconds: 1),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 3)),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.screen_rotation_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 4),
+                              Text('បង្វិលតាមទិសដើរ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
