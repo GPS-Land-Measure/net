@@ -3,9 +3,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'utils/app_theme.dart';
+import 'utils/offline_helper.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize offline network listener
+  OfflineHelper.init();
 
   // Load saved theme color across the whole application
   await AppTheme.loadSavedTheme();

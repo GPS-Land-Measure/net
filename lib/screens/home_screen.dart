@@ -14,6 +14,7 @@ import 'settings_screen.dart';
 import 'login_screen.dart';
 import 'camera_measure_screen.dart';
 import '../utils/app_theme.dart';
+import '../utils/offline_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -460,6 +461,52 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHomeDashboard(BuildContext context) {
     return Column(
       children: [
+        // 0. MODERN HIGH-TECH NETWORK & OFFLINE HUD BANNER
+        ValueListenableBuilder<NetQuality>(
+          valueListenable: OfflineHelper.netQuality,
+          builder: (context, quality, _) {
+            if (quality == NetQuality.fast) return const SizedBox.shrink();
+
+            final isOffline = quality == NetQuality.offline;
+            final bannerColor = isOffline ? const Color(0xFFE11D48) : const Color(0xFFD97706);
+            final statusText = isOffline
+                ? '📴 ដំណើរការក្រៅបណ្តាញ (Offline Mode) • GPS ផ្កាយរណបដំណើរការធម្មតា'
+                : '⚡ អ៊ីនធឺណិតខ្សោយ (Weak Signal) • ដំណើរការប្រព័ន្ធ Turbo Cache រលូន';
+
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [bannerColor, bannerColor.withOpacity(0.85)],
+                ),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isOffline ? Icons.wifi_off_rounded : Icons.network_check_rounded,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    statusText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+
         // 1. Top Bar
         _buildTopBar(context),
         const SizedBox(height: 10),

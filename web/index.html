@@ -47,18 +47,15 @@
 
 <body>
   <script>
-    // Unregister legacy service workers to prevent aggressive mobile caching
+    // Register PWA Service Worker for 100% Offline Capability
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (var registration of registrations) {
-          registration.unregister();
-        }
-      });
-      if ('caches' in window) {
-        caches.keys().then(function(names) {
-          for (var name of names) caches.delete(name);
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('sw.js').then(function(reg) {
+          console.log('PWA Offline ServiceWorker registered:', reg.scope);
+        }).catch(function(err) {
+          console.warn('ServiceWorker registration error:', err);
         });
-      }
+      });
     }
   </script>
   <script src="flutter_bootstrap.js" async></script>

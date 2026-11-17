@@ -14,6 +14,7 @@ import '../models/measurement.dart';
 import '../utils/geo_calculator.dart';
 import '../widgets/measurement_bottom_sheet.dart';
 import '../utils/app_theme.dart';
+import '../utils/offline_helper.dart';
 
 enum MeasureMode { polygon, rectangle, circle, distance, walk }
 
@@ -173,48 +174,59 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   int _mapStyleIndex = 0; // Default to Google Satellite Hybrid HD (High Resolution Cambodia)
   final List<Map<String, String>> _mapStyles = [
     {
-      'name': 'ផ្កាយរណប Google (Hybrid HD)',
-      'url': 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+      'name': 'ផ្កាយរណប Google (Ultra HD 4K)',
+      'url': 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&scale=2',
       'icon': '🛰️',
-      'maxNativeZoom': '20',
+      'maxNativeZoom': '21',
+      'subdomains': '0,1,2,3',
     },
     {
-      'name': 'ផ្កាយរណបសុទ្ធ (Google Satellite)',
-      'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      'name': 'ផ្កាយរណបសុទ្ធ 4K (Google Satellite)',
+      'url': 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&scale=2',
       'icon': '📡',
-      'maxNativeZoom': '20',
+      'maxNativeZoom': '21',
+      'subdomains': '0,1,2,3',
     },
     {
-      'name': 'ផែនទីផ្លូវថ្នល់ (Google Streets)',
-      'url': 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+      'name': 'ផែនទីផ្លូវថ្នល់ HD (Google Streets)',
+      'url': 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&scale=2',
       'icon': '🗺️',
-      'maxNativeZoom': '20',
+      'maxNativeZoom': '21',
+      'subdomains': '0,1,2,3',
     },
     {
-      'name': 'ផែនទី OpenStreetMap',
+      'name': 'ផ្កាយរណប ArcGIS World (High Clarity)',
+      'url': 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      'icon': '🌐',
+      'maxNativeZoom': '19',
+      'subdomains': '',
+    },
+    {
+      'name': 'ផែនទី OpenStreetMap (HD)',
       'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       'icon': '🌍',
       'maxNativeZoom': '19',
+      'subdomains': 'a,b,c',
     },
     {
-      'name': 'ផ្កាយរណប ArcGIS World',
-      'url': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      'icon': '🌐',
-      'maxNativeZoom': '17',
-    },
-    {
-      'name': 'ទេសភាពដី (Topo)',
+      'name': 'ទេសភាពដី (Topo HD)',
       'url': 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
       'icon': '⛰️',
       'maxNativeZoom': '17',
+      'subdomains': 'a,b,c',
     },
     {
       'name': 'ប្លង់ក្រឡាសុរិយោដី (Cadastral Grid Offline)',
       'url': '',
       'icon': '📐',
       'maxNativeZoom': '22',
+      'subdomains': '',
     },
   ];
+
+  // Saved Land Measurements Pins (ដីដែលធ្លាប់វាស់រួច - Pin លើផែនទី)
+  List<Measurement> _savedMeasurements = [];
+  bool _showSavedPins = true;
 
   // GPS Accuracy & Live Position
   double _gpsAccuracy = 1.2;
@@ -307,6 +319,18 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
         _labelFontScale = 1.0;
       }
     });
+    _loadSavedMeasurements();
+  }
+
+  Future<void> _loadSavedMeasurements() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList('measurements') ?? [];
+      if (!mounted) return;
+      setState(() {
+        _savedMeasurements = list.map((s) => Measurement.fromJsonString(s)).toList();
+      });
+    } catch (_) {}
   }
 
   void _triggerFeedback() {
@@ -2486,9 +2510,19 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   if (currentTile['url']!.isNotEmpty)
                     TileLayer(
                       urlTemplate: currentTile['url']!,
+                      subdomains: (currentTile['subdomains'] ?? '').isNotEmpty
+                          ? currentTile['subdomains']!.split(',')
+                          : const ['0', '1', '2', '3'],
                       maxZoom: 22,
-                      maxNativeZoom: int.tryParse(currentTile['maxNativeZoom'] ?? '20') ?? 20,
+                      maxNativeZoom: int.tryParse(currentTile['maxNativeZoom'] ?? '21') ?? 21,
+                      retinaMode: RetinaMode.isHighDensity(context),
                       userAgentPackageName: 'com.example.my_first_app',
+                    ),
+
+                  // ── Saved Historical Measured Land Polygons (បង្ហាញព្រំដីដែលធ្លាប់វាស់) ──
+                  if (_showSavedPins && _savedMeasurements.isNotEmpty)
+                    PolygonLayer(
+                      polygons: _buildSavedMeasurementPolygons(),
                     ),
 
                   // ── Official Cadastral Boundary Overlay (ប្លង់រឹងសុរិយោដី) ──
@@ -2568,6 +2602,15 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                             points: [_polygonPoints.last, _polygonPoints.first],
                             color: _boundaryColor.withOpacity(0.7),
                             strokeWidth: 3.2,
+                          ),
+
+                        // ── Live Laser Rangefinder Beam from GPS to Crosshair ──
+                        if (_userLocation != null && _showCrosshairReticle)
+                          Polyline(
+                            points: [_userLocation!, _currentCenter],
+                            color: const Color(0xFFEF4444).withOpacity(0.55),
+                            strokeWidth: 1.5,
+                            pattern: const StrokePattern.dotted(spacingFactor: 2),
                           ),
                       ],
                     ),
@@ -2732,6 +2775,12 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                         ),
                       ],
                     ),
+
+                  // ── Saved Historical Measured Land Pins (អាច Pin ទីតាំងដែលធ្លាប់វាស់) ──
+                  if (_showSavedPins && _savedMeasurements.isNotEmpty)
+                    MarkerLayer(
+                      markers: _buildSavedMeasurementPins(),
+                    ),
                 ],
               ),
             ),
@@ -2775,6 +2824,94 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   ),
                 ),
               ),
+
+            // ── MODERN HIGH-TECH NETWORK & OFFLINE HUD BANNER (ទំនើប + សន្សំទិន្នន័យ) ──
+            ValueListenableBuilder<NetQuality>(
+              valueListenable: OfflineHelper.netQuality,
+              builder: (context, quality, _) {
+                if (quality == NetQuality.fast) return const SizedBox.shrink();
+
+                final isOffline = quality == NetQuality.offline;
+                final bannerColor = isOffline ? const Color(0xFFE11D48) : const Color(0xFFD97706);
+                final statusText = isOffline
+                    ? '📴 ក្រៅបណ្តាញ (Offline) • GPS ផ្កាយរណបដំណើរការ ១០០%'
+                    : '⚠️ អ៊ីនធឺណិតខ្សោយ (Weak Net) • បើកដំណើរការ Turbo';
+
+                return Positioned(
+                  top: 54,
+                  left: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [bannerColor, bannerColor.withOpacity(0.85)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white30, width: 1),
+                      boxShadow: [
+                        BoxShadow(color: bannerColor.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              isOffline ? Icons.wifi_off_rounded : Icons.network_check_rounded,
+                              color: Colors.white,
+                              size: 15,
+                            ),
+                            const SizedBox(width: 7),
+                            Text(
+                              statusText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _mapStyleIndex = 6; // Quick Switch to Cadastral Offline Grid
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('⚡ បានប្តូរទៅកាន់ប្លង់ក្រឡា Offline ល្បឿនលឿន (Zero Latency)!'),
+                                duration: Duration(seconds: 1),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4),
+                              ],
+                            ),
+                            child: Text(
+                              _mapStyleIndex == 6 ? '⚡ សកម្ម (Active)' : '⚡ ប្តូរទៅ Offline',
+                              style: TextStyle(
+                                color: bannerColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
 
             // ── 3. TOP CLEAN & SPACIOUS SURVEYOR BAR ──
             Positioned(
@@ -2851,6 +2988,29 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                       color: const Color(0xFFEF4444),
                       tooltip: 'កំណត់ឡើងវិញ',
                       onTap: _clearMeasurement,
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Toggle Saved Measured Land Pins (បង្ហាញ/លាក់ ដីធ្លាប់វាស់)
+                    _buildToolButton(
+                      icon: Icons.push_pin_rounded,
+                      color: _showSavedPins ? const Color(0xFFF59E0B) : _neuTextMuted,
+                      tooltip: _showSavedPins ? 'លាក់ដីធ្លាប់វាស់' : 'បង្ហាញដីធ្លាប់វាស់',
+                      onTap: () {
+                        _triggerFeedback();
+                        setState(() => _showSavedPins = !_showSavedPins);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              _showSavedPins
+                                  ? '📍 បានបង្ហាញ Pin ដីធ្លាប់វាស់ (${_savedMeasurements.length} កន្លែង)'
+                                  : '📍 បានលាក់ Pin ដីធ្លាប់វាស់',
+                            ),
+                            duration: const Duration(seconds: 1),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 6),
 
@@ -3736,6 +3896,31 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   ],
                 ),
               ),
+
+              // Modern Live Laser Distance Readout Pill
+              if (_userLocation != null)
+                Positioned(
+                  top: 60,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E2638).withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF10B981).withOpacity(0.7), width: 1),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 4),
+                      ],
+                    ),
+                    child: Text(
+                      '🎯 ${haversineDistance(_userLocation!, _currentCenter).toStringAsFixed(1)}m',
+                      style: const TextStyle(
+                        color: Color(0xFF10B981),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -5685,6 +5870,242 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SAVED HISTORICAL MEASUREMENT PINS & DETAILS (Pin ទីតាំងធ្លាប់វាស់)
+  // ─────────────────────────────────────────────────────────────
+  LatLng? _getMeasurementCenter(Measurement m) {
+    if (m.type == MeasurementType.circle && m.centerLat != null && m.centerLng != null) {
+      return LatLng(m.centerLat!, m.centerLng!);
+    }
+    if (m.points != null && m.points!.isNotEmpty) {
+      double sumLat = 0;
+      double sumLng = 0;
+      for (final p in m.points!) {
+        sumLat += p['lat'] ?? 0;
+        sumLng += p['lng'] ?? 0;
+      }
+      return LatLng(sumLat / m.points!.length, sumLng / m.points!.length);
+    }
+    return null;
+  }
+
+  List<Polygon> _buildSavedMeasurementPolygons() {
+    final List<Polygon> polys = [];
+    for (final m in _savedMeasurements) {
+      if (m.type == MeasurementType.polygon && m.points != null && m.points!.length >= 3) {
+        final pts = m.points!.map((p) => LatLng(p['lat']!, p['lng']!)).toList();
+        polys.add(
+          Polygon(
+            points: pts,
+            color: const Color(0xFFF59E0B).withOpacity(0.12),
+            borderColor: const Color(0xFFF59E0B).withOpacity(0.75),
+            borderStrokeWidth: 1.8,
+          ),
+        );
+      }
+    }
+    return polys;
+  }
+
+  List<Marker> _buildSavedMeasurementPins() {
+    final List<Marker> markers = [];
+    for (int i = 0; i < _savedMeasurements.length; i++) {
+      final m = _savedMeasurements[i];
+      final center = _getMeasurementCenter(m);
+      if (center == null) continue;
+
+      final areaText = m.areaM2 >= 10000
+          ? '${(m.areaM2 / 10000).toStringAsFixed(2)} Ha'
+          : '${m.areaM2.toInt()} m²';
+
+      markers.add(
+        Marker(
+          point: center,
+          width: 140,
+          height: 48,
+          alignment: Alignment.topCenter,
+          child: GestureDetector(
+            onTap: () {
+              _triggerFeedback();
+              _showSavedParcelDetailModal(m);
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2638).withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 5, offset: const Offset(0, 2)),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.push_pin_rounded, color: Color(0xFFF59E0B), size: 12),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          m.name,
+                          style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        areaText,
+                        style: const TextStyle(color: Color(0xFF10B981), fontSize: 9, fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 2,
+                  height: 6,
+                  color: const Color(0xFFF59E0B),
+                ),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF59E0B),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return markers;
+  }
+
+  void _showSavedParcelDetailModal(Measurement m) {
+    final center = _getMeasurementCenter(m);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+        decoration: BoxDecoration(
+          color: _neuBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: Colors.white, width: 1.5),
+          boxShadow: neuExtrudedShadows(distance: 6, blur: 20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(color: _neuDarkShadow.withOpacity(0.6), borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF59E0B),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.push_pin_rounded, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        m.name,
+                        style: const TextStyle(color: _neuTextDark, fontSize: 16, fontWeight: FontWeight.w900),
+                      ),
+                      Text(
+                        'កាលបរិច្ឆេទវាស់: ${m.createdAt.day}/${m.createdAt.month}/${m.createdAt.year}',
+                        style: const TextStyle(color: _neuTextMuted, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSegmentMetricCard('ផ្ទៃដីសរុប', '${m.areaM2.toStringAsFixed(1)} m²', const Color(0xFF10B981)),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildSegmentMetricCard('ហិកតា', '${(m.areaM2 / 10000).toStringAsFixed(3)} Ha', _neuCobalt),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildSegmentMetricCard('បរិមាត្រ', '${m.perimeterM.toStringAsFixed(1)} m', const Color(0xFFF59E0B)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _neuCobalt,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.center_focus_strong_rounded, color: Colors.white, size: 16),
+                    label: const Text('ហោះទៅមើលដីនេះ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      if (center != null) {
+                        _safeMoveMap(center, 18.5);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.edit_road_rounded, color: Colors.white, size: 16),
+                    label: const Text('ផ្ទុកវាស់បន្ត', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      if (m.points != null && m.points!.isNotEmpty) {
+                        setState(() {
+                          _polygonPoints.clear();
+                          _polygonPoints.addAll(m.points!.map((p) => LatLng(p['lat']!, p['lng']!)));
+                          _mode = MeasureMode.polygon;
+                          _recalculate();
+                        });
+                        if (center != null) _safeMoveMap(center, 18.0);
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
