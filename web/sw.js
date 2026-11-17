@@ -1,6 +1,5 @@
 // GPS Land Measure - Production Offline Service Worker (PWA)
-const CACHE_NAME = 'gps-land-measure-v3';
-const TILE_CACHE_NAME = 'gps-map-tiles-v1';
+const CACHE_NAME = 'gps-land-measure-v4';
 
 const CORE_ASSETS = [
   './',
@@ -11,13 +10,13 @@ const CORE_ASSETS = [
   'icons/Icon-512.png'
 ];
 
-// Install: Cache critical core assets
+// Install: Cache critical app shell assets
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(CORE_ASSETS).catch((err) => {
-        console.warn('Some core assets failed to pre-cache:', err);
+        console.warn('Pre-cache warning:', err);
       });
     })
   );
@@ -29,7 +28,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME && key !== TILE_CACHE_NAME) {
+          if (key !== CACHE_NAME) {
             console.log('Purging old cache:', key);
             return caches.delete(key);
           }
@@ -39,44 +38,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: Smart Network-First / Stale-While-Revalidate strategy for 100% offline usage
+// Fetch: Never block external map tiles! Cache app shell for offline
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  // 1. Map Tiles (Google, OpenStreetMap, ArcGIS, Topo)
-  if (
-    url.hostname.includes('google.com') && url.pathname.includes('/vt/') ||
-    url.hostname.includes('openstreetmap.org') ||
-    url.hostname.includes('arcgisonline.com') ||
-    url.hostname.includes('opentopomap.org')
-  ) {
-    event.respondWith(
-      caches.open(TILE_CACHE_NAME).then((cache) => {
-        return cache.match(request).then((cachedResponse) => {
-          if (cachedResponse) {
-            // Return cached tile immediately
-            return cachedResponse;
-          }
-          // Fetch from network and cache
-          return fetch(request).then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(request, networkResponse.clone());
-            }
-            return networkResponse;
-          }).catch(() => {
-            // When offline and tile not in cache, return null/fallback
-            return new Response('', { status: 408, headers: { 'Content-Type': 'image/png' } });
-          });
-        });
-      })
-    );
-    return;
+  // 1. External Map Tiles & APIs: Let the browser handle directly with native cache!
+  if (url.origin !== self.location.origin) {
+    return; // Pass through to native browser network
   }
 
-  // 2. Navigation & App Shell (index.html, JS bundles, canvaskit, fonts)
+  // 2. Local App Shell & Assets (Network-First with Offline Cache Fallback)
   event.respondWith(
     fetch(request).then((networkResponse) => {
       if (networkResponse && networkResponse.status === 200) {
@@ -87,21 +61,13 @@ self.addEventListener('fetch', (event) => {
       }
       return networkResponse;
     }).catch(() => {
-      // Offline fallback: Match from cache
       return caches.match(request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        // If requesting a page/navigation while offline, return cached index.html
+        if (cachedResponse) return cachedResponse;
         if (request.mode === 'navigate') {
           return caches.match('./index.html') || caches.match('index.html');
         }
-        return new Response('Offline: Resource not available in cache.', {
-          status: 503,
-          headers: { 'Content-Type': 'text/plain' }
-        });
+        return new Response('Offline', { status: 503 });
       });
     })
   );
 });
-

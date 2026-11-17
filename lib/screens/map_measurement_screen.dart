@@ -174,53 +174,46 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   int _mapStyleIndex = 0; // Default to Google Satellite Hybrid HD (High Resolution Cambodia)
   final List<Map<String, String>> _mapStyles = [
     {
-      'name': 'ផ្កាយរណប Google (Ultra HD 4K)',
-      'url': 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&scale=2',
+      'name': 'ផ្កាយរណប Google (Hybrid HD)',
+      'url': 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
       'icon': '🛰️',
-      'maxNativeZoom': '21',
-      'subdomains': '0,1,2,3',
+      'maxNativeZoom': '20',
     },
     {
-      'name': 'ផ្កាយរណបសុទ្ធ 4K (Google Satellite)',
-      'url': 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&scale=2',
+      'name': 'ផ្កាយរណបសុទ្ធ (Google Satellite)',
+      'url': 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
       'icon': '📡',
-      'maxNativeZoom': '21',
-      'subdomains': '0,1,2,3',
+      'maxNativeZoom': '20',
     },
     {
-      'name': 'ផែនទីផ្លូវថ្នល់ HD (Google Streets)',
-      'url': 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&scale=2',
+      'name': 'ផែនទីផ្លូវថ្នល់ (Google Streets)',
+      'url': 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
       'icon': '🗺️',
-      'maxNativeZoom': '21',
-      'subdomains': '0,1,2,3',
+      'maxNativeZoom': '20',
     },
     {
       'name': 'ផ្កាយរណប ArcGIS World (High Clarity)',
-      'url': 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      'url': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       'icon': '🌐',
       'maxNativeZoom': '19',
-      'subdomains': '',
     },
     {
-      'name': 'ផែនទី OpenStreetMap (HD)',
+      'name': 'ផែនទី OpenStreetMap',
       'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       'icon': '🌍',
       'maxNativeZoom': '19',
-      'subdomains': 'a,b,c',
     },
     {
-      'name': 'ទេសភាពដី (Topo HD)',
+      'name': 'ទេសភាពដី (Topo)',
       'url': 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
       'icon': '⛰️',
       'maxNativeZoom': '17',
-      'subdomains': 'a,b,c',
     },
     {
       'name': 'ប្លង់ក្រឡាសុរិយោដី (Cadastral Grid Offline)',
       'url': '',
       'icon': '📐',
       'maxNativeZoom': '22',
-      'subdomains': '',
     },
   ];
 
@@ -2510,12 +2503,8 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
                   if (currentTile['url']!.isNotEmpty)
                     TileLayer(
                       urlTemplate: currentTile['url']!,
-                      subdomains: (currentTile['subdomains'] ?? '').isNotEmpty
-                          ? currentTile['subdomains']!.split(',')
-                          : const ['0', '1', '2', '3'],
                       maxZoom: 22,
-                      maxNativeZoom: int.tryParse(currentTile['maxNativeZoom'] ?? '21') ?? 21,
-                      retinaMode: RetinaMode.isHighDensity(context),
+                      maxNativeZoom: int.tryParse(currentTile['maxNativeZoom'] ?? '20') ?? 20,
                       userAgentPackageName: 'com.example.my_first_app',
                     ),
 
