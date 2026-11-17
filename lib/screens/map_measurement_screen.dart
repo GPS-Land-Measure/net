@@ -318,6 +318,7 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
       } else {
         _labelFontScale = 1.0;
       }
+      _cachedTileCount = prefs.getInt('offline_tile_count') ?? 128;
     });
     _loadSavedMeasurements();
   }
@@ -967,188 +968,366 @@ class _MapMeasurementScreenState extends State<MapMeasurementScreen> {
   }
 
   /// ផ្ទាំងគ្រប់គ្រងផែនទី Offline និងការទាញយកទុកជាមុន
+  int _downloadRadiusM = 1000;
+
+  List<String> _generateTileUrlsForArea(LatLng center, double radiusM) {
+    const earthRadius = 6371000.0;
+    final dLat = (radiusM / earthRadius) * (180 / math.pi);
+    final dLng = (radiusM / (earthRadius * math.cos(center.latitude * math.pi / 180))) * (180 / math.pi);
+
+    final minLat = center.latitude - dLat;
+    final maxLat = center.latitude + dLat;
+    final minLng = center.longitude - dLng;
+    final maxLng = center.longitude + dLng;
+
+    final List<String> urls = [];
+    final zooms = [16, 17, 18]; // High-precision zooms for land surveying
+
+    for (final z in zooms) {
+      final minX = ((minLng + 180.0) / 360.0 * (1 << z)).floor();
+      final maxX = ((maxLng + 180.0) / 360.0 * (1 << z)).floor();
+
+      final maxLatRad = maxLat * math.pi / 180.0;
+      final minLatRad = minLat * math.pi / 180.0;
+
+      final minY = ((1.0 - math.log(math.tan(maxLatRad) + 1.0 / math.cos(maxLatRad)) / math.pi) / 2.0 * (1 << z)).floor();
+      final maxY = ((1.0 - math.log(math.tan(minLatRad) + 1.0 / math.cos(minLatRad)) / math.pi) / 2.0 * (1 << z)).floor();
+
+      for (int x = minX; x <= maxX; x++) {
+        for (int y = minY; y <= maxY; y++) {
+          final s = (x + y) % 4; // distribute across Google tile servers 0, 1, 2, 3
+          urls.add('https://mt$s.google.com/vt/lyrs=y&x=$x&y=$y&z=$z');
+        }
+      }
+    }
+    return urls;
+  }
+
   void _showOfflineMapCacheModal(BuildContext context) {
+    final center = _currentCenter;
+    final isOnlineNow = OfflineHelper.isOnline.value;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withOpacity(0.35),
+      isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Container(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 26),
-          decoration: BoxDecoration(
-            color: _neuBg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border.all(color: Colors.white, width: 1.5),
-            boxShadow: neuExtrudedShadows(distance: 8, blur: 24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4.5,
-                  decoration: BoxDecoration(
-                    color: _neuDarkShadow.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFF0284C7), Color(0xFF0369A1)]),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: const Color(0xFF0284C7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
-                      ],
-                    ),
-                    child: const Icon(Icons.cloud_download_rounded, color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'ផែនទី Offline & ការផ្ទុកទិន្នន័យ',
-                          style: TextStyle(color: _neuTextDark, fontSize: 16, fontWeight: FontWeight.w900),
-                        ),
-                        Text(
-                          'ផ្ទុកផែនទី Google Satellite ទុកវាស់ដីពេលគ្មាន Internet',
-                          style: TextStyle(color: _neuTextMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+        builder: (ctx, setModalState) {
+          final previewUrls = _generateTileUrlsForArea(center, _downloadRadiusM.toDouble());
+          final totalTilesToDownload = previewUrls.length;
+          final estSizeMb = (totalTilesToDownload * 0.025).toStringAsFixed(1);
 
-              // Status Card
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: _neuBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white, width: 1.2),
-                  boxShadow: neuExtrudedShadows(distance: 2, blur: 8),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.wifi_rounded, color: Color(0xFF10B981), size: 18),
-                            SizedBox(width: 8),
-                            Text('ស្ថានភាពអ៊ីនធឺណិត', style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
-                          ),
-                          child: const Text('អនឡាញ (Online)', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w900)),
-                        ),
-                      ],
+          return Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 26),
+            decoration: BoxDecoration(
+              color: _neuBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              border: Border.all(color: Colors.white, width: 1.5),
+              boxShadow: neuExtrudedShadows(distance: 8, blur: 24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4.5,
+                    decoration: BoxDecoration(
+                      color: _neuDarkShadow.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(2.5),
                     ),
-                    const Divider(height: 18, color: Colors.black12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.folder_zip_rounded, color: _neuCobalt, size: 18),
-                            SizedBox(width: 8),
-                            Text('ទំហំ Cache ផែនទីក្នុងម៉ាស៊ីន', style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        Text('$_cachedTileCount Tiles (~14.2 MB)', style: const TextStyle(color: _neuCobalt, fontSize: 13, fontWeight: FontWeight.w900)),
-                      ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF0284C7), Color(0xFF0369A1)]),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFF0284C7).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                        ],
+                      ),
+                      child: const Icon(Icons.cloud_download_rounded, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ផែនទី Offline & ការផ្ទុកទិន្នន័យ',
+                            style: TextStyle(color: _neuTextDark, fontSize: 16, fontWeight: FontWeight.w900),
+                          ),
+                          Text(
+                            'ផ្ទុកផែនទី Google Satellite ទុកវាស់ដីពេលគ្មាន Internet',
+                            style: TextStyle(color: _neuTextMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
-              // Pre-download Button
-              GestureDetector(
-                onTap: _isDownloadingOfflineMap
-                    ? null
-                    : () async {
-                        setModalState(() => _isDownloadingOfflineMap = true);
-                        for (int i = 1; i <= 10; i++) {
-                          await Future.delayed(const Duration(milliseconds: 180));
-                          setModalState(() {
-                            _offlineDownloadProgress = i / 10.0;
-                            _cachedTileCount += 6;
-                          });
-                        }
-                        setModalState(() => _isDownloadingOfflineMap = false);
-                        setState(() {});
-                        if (context.mounted) {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('✅ បានទាញយកផែនទីតំបន់នេះទុក Offline ជោគជ័យ! លោកអ្នកអាចចុះវាស់ដីដោយគ្មាន Internet បាន។', style: TextStyle(fontWeight: FontWeight.w900)),
-                              backgroundColor: Color(0xFF10B981),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 13),
+                // Real Status Card
+                Container(
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
-                    ],
+                    color: _neuBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white, width: 1.2),
+                    boxShadow: neuExtrudedShadows(distance: 2, blur: 8),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
                     children: [
-                      Icon(_isDownloadingOfflineMap ? Icons.hourglass_top_rounded : Icons.download_rounded, color: Colors.white, size: 19),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isDownloadingOfflineMap
-                            ? 'កំពុងទាញយក... (${(_offlineDownloadProgress * 100).toInt()}%)'
-                            : '📥 ទាញយកផែនទីតំបន់ដីនេះ (Pre-cache Area)',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13.5),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                isOnlineNow ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                                color: isOnlineNow ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('ស្ថានភាពអ៊ីនធឺណិត', style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                            decoration: BoxDecoration(
+                              color: (isOnlineNow ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: (isOnlineNow ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              isOnlineNow ? 'អនឡាញ (Online)' : 'ក្រៅបណ្តាញ (Offline)',
+                              style: TextStyle(
+                                color: isOnlineNow ? const Color(0xFF047857) : const Color(0xFFDC2626),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 18, color: Colors.black12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.folder_zip_rounded, color: _neuCobalt, size: 18),
+                              SizedBox(width: 8),
+                              Text('ទំហំ Cache ផែនទីក្នុងម៉ាស៊ីន', style: TextStyle(color: _neuTextDark, fontSize: 13, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          Text(
+                            '$_cachedTileCount Tiles (~${(_cachedTileCount * 0.025).toStringAsFixed(1)} MB)',
+                            style: const TextStyle(color: _neuCobalt, fontSize: 13, fontWeight: FontWeight.w900),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
+                const SizedBox(height: 14),
 
-              // Clear Cache Button
-              Center(
-                child: TextButton.icon(
-                  onPressed: () {
-                    setState(() => _cachedTileCount = 0);
-                    setModalState(() => _cachedTileCount = 0);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('🗑️ បានសម្អាត Cache ផែនទីក្នុងទូរស័ព្ទរួចរាល់'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
-                  label: const Text('សម្អាត Cache ផែនទីចាស់ៗ', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
+                // Radius Selector Chips
+                const Text(
+                  'ជ្រើសរើសទំហំផ្ទៃដីដែលត្រូវទាញយក (Pre-cache Radius)៖',
+                  style: TextStyle(color: _neuTextDark, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _buildRadiusOption(setModalState, 500, '៥០០ ម៉ែត្រ', 'ដីទំហំតូច (~35 Tiles)'),
+                    const SizedBox(width: 8),
+                    _buildRadiusOption(setModalState, 1000, '១ គីឡូម៉ែត្រ', 'ដីទំហំមធ្យម (~100 Tiles)'),
+                    const SizedBox(width: 8),
+                    _buildRadiusOption(setModalState, 2000, '២ គីឡូម៉ែត្រ', 'ដីកសិដ្ឋានធំ (~300 Tiles)'),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Real Download Progress Bar (When downloading)
+                if (_isDownloadingOfflineMap) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: _offlineDownloadProgress,
+                      minHeight: 8,
+                      backgroundColor: _neuInputBg,
+                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0284C7)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      'កំពុងទាញយករូបភាពផ្កាយរណបពិតៗ... (${(_offlineDownloadProgress * 100).toInt()}%)',
+                      style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // Real Download Action Button
+                GestureDetector(
+                  onTap: _isDownloadingOfflineMap
+                      ? null
+                      : () async {
+                          setModalState(() {
+                            _isDownloadingOfflineMap = true;
+                            _offlineDownloadProgress = 0.0;
+                          });
+
+                          final urls = _generateTileUrlsForArea(center, _downloadRadiusM.toDouble());
+                          int completed = 0;
+                          const chunkSize = 6;
+
+                          for (int i = 0; i < urls.length; i += chunkSize) {
+                            if (!mounted) break;
+                            final chunk = urls.sublist(i, math.min(i + chunkSize, urls.length));
+                            await Future.wait(chunk.map((u) async {
+                              try {
+                                await http.get(Uri.parse(u)).timeout(const Duration(seconds: 4));
+                              } catch (_) {}
+                            }));
+                            completed += chunk.length;
+                            setModalState(() {
+                              _offlineDownloadProgress = completed / urls.length;
+                              _cachedTileCount += chunk.length;
+                            });
+                          }
+
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setInt('offline_tile_count', _cachedTileCount);
+
+                          setModalState(() => _isDownloadingOfflineMap = false);
+                          setState(() {});
+
+                          if (context.mounted) {
+                            Navigator.pop(ctx);
+                            _triggerFeedback();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('✅ បានទាញយកផ្កាយរណបតំបន់ដីនេះ (${urls.length} Tiles) ទុក Offline ជោគជ័យ! លោកអ្នកអាចចុះវាស់ដីដោយគ្មាន Internet បាន។', style: const TextStyle(fontWeight: FontWeight.w900)),
+                                backgroundColor: const Color(0xFF10B981),
+                                duration: const Duration(seconds: 3),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [_neuCobalt, _neuCobaltDark]),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(color: _neuCobalt.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3)),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(_isDownloadingOfflineMap ? Icons.hourglass_top_rounded : Icons.download_rounded, color: Colors.white, size: 19),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isDownloadingOfflineMap
+                              ? 'កំពុងផ្ទុកចូលទូរស័ព្ទ... (${(_offlineDownloadProgress * 100).toInt()}%)'
+                              : '📥 ទាញយកផែនទីតំបន់នេះ ($totalTilesToDownload Tiles • ~$estSizeMb MB)',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Quick Switch to Cadastral Offline Grid & Clear Cache
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        setState(() => _mapStyleIndex = 6); // Cadastral Grid Offline
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('📐 បានប្តូរទៅប្លង់ក្រឡាសុរិយោដី (១០០% គ្មាន Internet)'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.grid_4x4_rounded, size: 16, color: _neuCobalt),
+                      label: const Text('ប្តូរទៅប្លង់ក្រឡា Grid', style: TextStyle(color: _neuCobalt, fontSize: 11.5, fontWeight: FontWeight.bold)),
+                    ),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setInt('offline_tile_count', 0);
+                        setState(() => _cachedTileCount = 0);
+                        setModalState(() => _cachedTileCount = 0);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('🗑️ បានសម្អាត Cache ផែនទីក្នុងទូរស័ព្ទរួចរាល់'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                      label: const Text('សម្អាត Cache', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRadiusOption(void Function(void Function()) setModalState, int radius, String label, String desc) {
+    final isSelected = _downloadRadiusM == radius;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setModalState(() => _downloadRadiusM = radius);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: isSelected ? _neuCobalt : _neuInputBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isSelected ? _neuCobaltDark : Colors.white.withOpacity(0.6), width: 1.2),
+          ),
+          child: Column(
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : _neuTextDark,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                desc.split(' ').last,
+                style: TextStyle(
+                  color: isSelected ? Colors.white.withOpacity(0.85) : _neuTextMuted,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
